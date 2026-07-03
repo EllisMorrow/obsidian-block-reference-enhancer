@@ -373,6 +373,7 @@ If you run into a problem:
 - The Obsidian default theme is the compatibility baseline for this plugin. Other themes are not guaranteed to render or behave correctly.
 - Live Preview can still show small visual differences in very complex lists or under heavily customized themes.
 - When a source block is missing, recovery defaults to the recovery page instead of restoring the block back into its original file and line position.
+- **2026-07-03 — Obsidian folding issue:** This issue has been [reported to Obsidian on the official forum](https://forum.obsidian.md/t/lists-folding-hides-content-outside-of-the-fold-when-switching-from-reading-to-edit-mode/103036). Obsidian can leave list content incorrectly folded after using `Fold all headings and lists`, especially when switching between Reading Mode and Live Preview. It is reproducible with all community plugins disabled and is not caused by Block Reference Enhancer. Until Obsidian fixes it, users are advised not to use `Fold all headings and lists`; if it occurs, run `Unfold all headings and lists` to restore the hidden content.
 
 ## 🛠 Development
 

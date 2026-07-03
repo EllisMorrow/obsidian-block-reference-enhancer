@@ -377,6 +377,7 @@ Obsidian 打开命令面板快捷键：
 - Obsidian 默认主题是这个插件的兼容性基准主题，其他主题不保证能正常显示或正常交互
 - 在非常复杂的列表结构或高度定制主题下，Live Preview 仍可能有少量视觉差异
 - 源块丢失时恢复策略默认写入恢复页，不会自动按原文件和原行号插回去
+- **2026-07-03 — Obsidian 原生折叠问题：**该问题已在 [Obsidian 官方论坛提交](https://forum.obsidian.md/t/lists-folding-hides-content-outside-of-the-fold-when-switching-from-reading-to-edit-mode/103036)。使用 Obsidian 的“折叠所有标题和列表”后，特别是在阅读模式与实时预览之间切换时，部分列表内容可能继续被错误折叠。该问题在关闭全部第三方插件后仍可稳定复现，不是 Block Reference Enhancer 引起的。在 Obsidian 官方修复前，建议用户不要使用“折叠所有标题和列表”；如果已经发生，请执行“展开所有标题和列表”恢复被隐藏的内容。
 
 ## 🛠 开发
 
