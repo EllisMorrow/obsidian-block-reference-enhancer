@@ -7,8 +7,8 @@ English documentation is available in [README.md](./README.md).
 <img alt="图片" src="https://github.com/user-attachments/assets/9aca75b9-056a-4a7e-bb62-6562f93deb03" />
 
 它是一个“显示增强器”和“渲染器”（同时它也能建立和自动检测块引用块嵌入的增删）：
-- `((uuid))` 会显示成行内摘要
-- `{{embed ((uuid))}}` 会显示成完整块嵌入和子级内容
+- `((uuid))` 会显示源块完整的第一行摘要
+- `{{embed ((uuid))}}` 会显示成完整块嵌入和可折叠的子级大纲
 - 原始 Markdown 不会被改写
 - 插件会维护自己的本地块索引，不依赖 Obsidian 自带搜索索引
 
@@ -25,8 +25,8 @@ English documentation is available in [README.md](./README.md).
 如果你的笔记已经是 UUID 风格的块结构，这个插件可以让它们在 Obsidian 里更自然地工作，而不用你重写整套笔记格式。
 
 你可以直接得到：
-- `((uuid))` 的行内摘要显示
-- `{{embed ((uuid))}}` 的完整块嵌入显示
+- `((uuid))` 的完整第一行摘要显示
+- `{{embed ((uuid))}}` 的完整块嵌入显示和子级大纲折叠
 - 渲染后的块引用、块嵌入可通过悬浮出现的 `Back` 按钮跳回源块
 - 源块旁的引用次数数字 badge
 - 点击数字后展开的引用位置弹窗
@@ -89,7 +89,7 @@ English documentation is available in [README.md](./README.md).
 
 ### 普通块引用
 
-`((uuid))` 会尽量显示成目标块第一行的简短摘要。
+`((uuid))` 会显示目标块完整的第一行。第一行较长时会正常换行，不再用省略号截断。
 
 鼠标悬浮、聚焦或点击到渲染后的引用上时，会出现并保持显示一个小的 `Back` 按钮，用来跳回源块。
 
@@ -100,6 +100,10 @@ English documentation is available in [README.md](./README.md).
 ### 块嵌入
 
 `{{embed ((uuid))}}` 会显示目标块本身和它的子级内容。
+
+块嵌入根节点和所有拥有子级的嵌入大纲节点，都会用紧凑的圆形三角按钮替代额外的列表圆点，用来折叠或展开该节点的子级。每一处块嵌入独立保存折叠状态，Live Preview 和 Reading Mode 都可使用，重启 Obsidian 后仍会保留。某处嵌入被删除或位置、UUID 发生变化时，旧状态会被清理；删除插件数据后，所有嵌入默认恢复为展开。
+
+折叠只影响视图，不会修改 Markdown 或缓存一份旧内容。源块保存后，所有块引用和块嵌入仍会同步最新索引内容，包括当前处于折叠状态的分支。
 
 鼠标悬浮、聚焦或点击到渲染后的嵌入上时，也会出现并保持显示同样的 `Back` 按钮，用来跳回源块。
 
@@ -214,7 +218,7 @@ Obsidian 打开命令面板快捷键：
 
 默认规则已包含常见属性，例如 id、collapsed、hl-*、ls-type。
 
-这个功能只会隐藏无序列表块下方的属性键值显示，不会修改 Markdown 原文。
+这个功能会隐藏无序列表块下方匹配规则的属性键值显示，也会对渲染后的块嵌入内容应用相同规则，但不会修改 Markdown 原文。
 
 当这个选项开启时，在 Live Preview 里对一个非空大纲块按 `Enter`：
 - 如果当前块已经有直接子列表，会创建一个新的“第一个子块”

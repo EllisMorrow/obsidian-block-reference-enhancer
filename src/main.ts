@@ -17,11 +17,17 @@ import { isHtmlElement } from './utils/dom';
 import { getOpeningMarkdownFenceState, isClosingMarkdownFence, type MarkdownFenceState } from './utils/markdownFence';
 import { serializeChildrenToHtml } from './utils/html';
 import { BlockReferenceEnhancerSettingTab } from './ui/BlockReferenceEnhancerSettingTab';
-import { DEFAULT_HIDDEN_LOGSEQ_PROPERTY_KEYS, HiddenLogseqPropertyMatcher, buildHiddenLogseqPropertyMatcher, isHiddenLogseqPropertyKey, isHiddenLogseqPropertyLineText, parseHiddenLogseqPropertyLine } from './services/LogseqPropertyMatcher';
+import { DEFAULT_HIDDEN_LOGSEQ_PROPERTY_KEYS, HiddenLogseqPropertyMatcher, buildHiddenLogseqPropertyMatcher, filterHiddenLogseqPropertyLinesForEmbed, isHiddenLogseqPropertyKey, isHiddenLogseqPropertyLineText, parseHiddenLogseqPropertyLine } from './services/LogseqPropertyMatcher';
 import { OutlinePasteController } from './services/OutlinePasteController';
 import { canCopyCurrentLevelAndChildren, copyCurrentLevelAndChildren } from './services/OutlineSubtreeCopyController';
 import { containsUuidBlockSyntaxOutsideCode, convertUuidSelectionToText, UuidSelectionCopyError } from './services/UuidSelectionCopyService';
 import { normalizeEmbedChildrenMarkdown } from './utils/blockMarkdown';
+import {
+	createEmbedOccurrenceKey,
+	EmbedFoldStateService,
+	type PersistedEmbedFoldState,
+} from './services/EmbedFoldStateService';
+import { createInlineReferenceSummary } from './services/InlineReferenceSummary';
 
 export interface BlockReferenceEnhancerSettings {
 	hideLogseqProperties: boolean;
@@ -32,6 +38,7 @@ export interface BlockReferenceEnhancerSettings {
 interface BlockReferenceEnhancerPersistedData {
 	settings?: Partial<BlockReferenceEnhancerSettings>;
 	indexCache?: PersistedIndexCacheV4 | PersistedIndexCacheV3 | LegacyPersistedBlockCacheEntry[] | null;
+	embedFoldState?: PersistedEmbedFoldState;
 }
 
 const DEFAULT_SETTINGS: BlockReferenceEnhancerSettings = {
@@ -40,7 +47,6 @@ const DEFAULT_SETTINGS: BlockReferenceEnhancerSettings = {
 	enablePasteClipboardAsOutline: false,
 };
 
-const MAX_INLINE_SUMMARY_LENGTH = 60;
 const STANDALONE_EMBED_REGEX = /^\s*\{\{embed\s+\(\(([A-Za-z0-9_-]{36,})\)\)\s*\}\}\s*$/;
 const MANUAL_RENDER_SCOPE_ATTR = 'data-block-ref-manual-render';
 const MANAGED_NODE_ATTR = 'data-block-ref-managed-node';
@@ -57,7 +63,10 @@ interface DeferredEmbedRenderTask {
 	sourcePath: string;
 	component: Component;
 	visitedEmbeds: Set<string>;
+	occurrenceKey: string | null;
 }
+
+type EmbedOccurrenceResolver = (uuid: string) => string | null;
 
 interface ScrollAnchorSnapshot {
 	element: HTMLElement;
@@ -108,9 +117,10 @@ class ReferencePostProcessChild extends MarkdownRenderChild {
 	}
 
 	private async loadReferences() {
+		const occurrenceResolver = this.plugin.createReadingModeEmbedOccurrenceResolver(this.containerEl, this.context);
 		this.readingModeQueueRoot = this.plugin.attachReadingModeRenderQueue(this.containerEl);
 		await this.plugin.processReadingModeHiddenLogseqProperties(this.containerEl, this.context);
-		await this.plugin.processRenderedReferences(this.containerEl, this.context.sourcePath, this, new Set<string>());
+		await this.plugin.processRenderedReferences(this.containerEl, this.context.sourcePath, this, new Set<string>(), occurrenceResolver);
 		this.plugin.processReadingModeSourceBlockBadges(this.containerEl, this.context);
 	}
 
@@ -129,6 +139,7 @@ export default class BlockReferenceEnhancer extends Plugin {
 	private startupFullRebuildPending = false;
 	private sourceReferencePopover: SourceReferencePopover | null = null;
 	private outlinePasteController: OutlinePasteController | null = null;
+	private embedFoldStateService: EmbedFoldStateService | null = null;
 	private persistedData: BlockReferenceEnhancerPersistedData = {};
 	private editorContextMenuTarget: EditorContextMenuTarget | null = null;
 	private hiddenLogseqPropertyMatcher: HiddenLogseqPropertyMatcher = buildHiddenLogseqPropertyMatcher(DEFAULT_HIDDEN_LOGSEQ_PROPERTY_KEYS);
@@ -169,6 +180,14 @@ export default class BlockReferenceEnhancer extends Plugin {
 
 	async onload() {
 		await this.loadSettings();
+		this.embedFoldStateService = new EmbedFoldStateService(this.persistedData.embedFoldState, async (embedFoldState) => {
+			this.persistedData = {
+				...this.persistedData,
+				settings: this.settings,
+				embedFoldState,
+			};
+			await this.saveData(this.persistedData);
+		});
 		this.addSettingTab(new BlockReferenceEnhancerSettingTab(this.app, this));
 		this.outlinePasteController = new OutlinePasteController(this.app);
 
@@ -233,6 +252,14 @@ export default class BlockReferenceEnhancer extends Plugin {
 				return;
 			}
 
+			const foldToggle = target.closest('.block-reference-embed-fold-toggle');
+			if (isHtmlElement(foldToggle)) {
+				event.preventDefault();
+				event.stopPropagation();
+				event.stopImmediatePropagation();
+				return;
+			}
+
 			const actionButton = target.closest('.block-reference-back-button, .block-reference-delete-button');
 			if (isHtmlElement(actionButton)) {
 				const host = this.getActionButtonHost(actionButton);
@@ -288,6 +315,15 @@ export default class BlockReferenceEnhancer extends Plugin {
 				return;
 			}
 
+			const foldToggle = target.closest('.block-reference-embed-fold-toggle');
+			if (isHtmlElement(foldToggle)) {
+				event.preventDefault();
+				event.stopPropagation();
+				event.stopImmediatePropagation();
+				this.embedFoldStateService?.handleToggle(foldToggle);
+				return;
+			}
+
 			const deleteButton = target.closest('.block-reference-delete-button');
 			if (isHtmlElement(deleteButton)) {
 				event.preventDefault();
@@ -317,6 +353,8 @@ export default class BlockReferenceEnhancer extends Plugin {
 	}
 
 	onunload() {
+		this.embedFoldStateService?.dispose();
+		this.embedFoldStateService = null;
 		this.outlinePasteController?.dispose();
 		this.outlinePasteController = null;
 		this.sourceReferencePopover?.destroy();
@@ -324,6 +362,7 @@ export default class BlockReferenceEnhancer extends Plugin {
 
 	private async handleLayoutReady() {
 		this.registerEvent(this.indexService.on('index-updated', () => {
+			this.reconcileEmbedFoldState();
 			this.referencePreviewCache.clear();
 			void this.sourceReferencePopover?.refreshIfOpen();
 			this.refreshOpenMarkdownViews();
@@ -337,6 +376,7 @@ export default class BlockReferenceEnhancer extends Plugin {
 				this.handleIndexStatus(status);
 			},
 		});
+		this.reconcileEmbedFoldState();
 
 		this.registerMarkdownPostProcessor((element, context) => {
 			return this.readingModeRenderer(element, context);
@@ -412,7 +452,23 @@ export default class BlockReferenceEnhancer extends Plugin {
 	}
 
 	private isPersistedData(value: unknown): value is BlockReferenceEnhancerPersistedData {
-		return !!value && typeof value === 'object' && ('settings' in value || 'indexCache' in value);
+		return !!value && typeof value === 'object' && ('settings' in value || 'indexCache' in value || 'embedFoldState' in value);
+	}
+
+	private reconcileEmbedFoldState() {
+		if (!this.embedFoldStateService) {
+			return;
+		}
+
+		const validOccurrenceKeys = new Set(this.indexService.getEmbedReferenceOccurrences().map((occurrence) => {
+			return createEmbedOccurrenceKey({
+				filePath: occurrence.filePath,
+				line: occurrence.line,
+				ch: occurrence.ch,
+				uuid: occurrence.blockId,
+			});
+		}));
+		this.embedFoldStateService.reconcileOccurrences(validOccurrenceKeys);
 	}
 
 	private syncHiddenLogseqPropertyMatcher() {
@@ -475,7 +531,6 @@ export default class BlockReferenceEnhancer extends Plugin {
 					void this.copyCurrentBlockSyntax(editor, info, 'embed', targetLine);
 				});
 		});
-
 		this.addCopyCurrentLevelAndChildrenMenuItem(menu, editor, targetLine);
 		this.addPasteClipboardAsOutlineMenuItem(menu, editor, info, targetLine);
 	}
@@ -807,29 +862,44 @@ export default class BlockReferenceEnhancer extends Plugin {
 			return this.getInlineReferenceInfoInternal(nestedUuid, nextVisited).text ?? '[missing block]';
 		});
 
-		const plainText = expandedLine
-			.replace(/!\[\[([^\]]+)\]\]/g, '$1')
-			.replace(/\[\[([^\]|]+)\|([^\]]+)\]\]/g, '$2')
-			.replace(/\[\[([^\]]+)\]\]/g, '$1')
-			.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
-			.replace(/^#{1,6}\s+/g, '')
-			.replace(/[*_~`]/g, '')
-			.replace(/\s+/g, ' ')
-			.trim();
-
-		const summary = plainText || '[empty block]';
+		const summary = createInlineReferenceSummary(expandedLine);
 		return {
-			text: summary.length > MAX_INLINE_SUMMARY_LENGTH
-				? `${summary.slice(0, MAX_INLINE_SUMMARY_LENGTH).trimEnd()}…`
-				: summary,
+			text: summary,
 			stale: block.status === 'stale',
 		};
 	}
 
-	async buildEmbedHtml(uuid: string, sourcePath: string, component: Component): Promise<string> {
+	async buildEmbedHtml(uuid: string, sourcePath: string, component: Component, occurrenceKey: string | null = null): Promise<string> {
 		const host = activeDocument.createElement('div');
-		await this.populateEmbedContainer(host, uuid, sourcePath, component, new Set<string>(), false);
+		await this.populateEmbedContainer(host, uuid, sourcePath, component, new Set<string>(), false, occurrenceKey);
 		return serializeChildrenToHtml(host);
+	}
+
+	createReadingModeEmbedOccurrenceResolver(element: HTMLElement, context: MarkdownPostProcessorContext): EmbedOccurrenceResolver | undefined {
+		const sectionInfo = context.getSectionInfo(element);
+		if (!sectionInfo) {
+			return undefined;
+		}
+
+		const parsed = new BlockParser().parse(context.sourcePath, sectionInfo.text);
+		const occurrencesByUuid = new Map<string, string[]>();
+		for (const [uuid, references] of parsed.referencesById.entries()) {
+			const occurrenceKeys = references
+				.filter((reference) => reference.kind === 'embed')
+				.sort((left, right) => left.line - right.line || left.ch - right.ch)
+				.map((reference) => createEmbedOccurrenceKey({
+					filePath: context.sourcePath,
+					line: sectionInfo.lineStart + reference.line,
+					ch: reference.ch,
+					uuid,
+				}));
+
+			if (occurrenceKeys.length > 0) {
+				occurrencesByUuid.set(uuid, occurrenceKeys);
+			}
+		}
+
+		return (uuid: string) => occurrencesByUuid.get(uuid)?.shift() ?? null;
 	}
 
 	attachReadingModeRenderQueue(element: HTMLElement): HTMLElement | null {
@@ -936,7 +1006,7 @@ export default class BlockReferenceEnhancer extends Plugin {
 	private enqueueReadingModeEmbedRender(previewRoot: HTMLElement, task: DeferredEmbedRenderTask) {
 		const queue = this.readingModeRenderQueues.get(previewRoot);
 		if (!queue) {
-			void this.populateEmbedContainer(task.host, task.uuid, task.sourcePath, task.component, task.visitedEmbeds);
+			void this.populateEmbedContainer(task.host, task.uuid, task.sourcePath, task.component, task.visitedEmbeds, true, task.occurrenceKey);
 			return;
 		}
 
@@ -982,7 +1052,7 @@ export default class BlockReferenceEnhancer extends Plugin {
 				}
 
 				const scrollAnchor = this.captureScrollAnchor(queue.previewRoot, queue.scrollRoot, task.host);
-				await this.populateEmbedContainer(task.host, task.uuid, task.sourcePath, task.component, task.visitedEmbeds);
+				await this.populateEmbedContainer(task.host, task.uuid, task.sourcePath, task.component, task.visitedEmbeds, true, task.occurrenceKey);
 				this.restoreScrollAnchor(queue.scrollRoot, scrollAnchor);
 				await this.waitForNextAnimationFrame();
 				this.restoreScrollAnchor(queue.scrollRoot, scrollAnchor);
@@ -1256,6 +1326,18 @@ export default class BlockReferenceEnhancer extends Plugin {
 		await this.processRenderedReferences(container, sourcePath, component, visitedEmbeds);
 	}
 
+	private prepareEmbedMarkdownForRender(markdown: string, assumeRootBlock: boolean): string {
+		if (!this.shouldHideLogseqProperties()) {
+			return markdown;
+		}
+
+		return filterHiddenLogseqPropertyLinesForEmbed(
+			markdown,
+			this.hiddenLogseqPropertyMatcher,
+			assumeRootBlock,
+		);
+	}
+
 	async populateEmbedContainer(
 		container: HTMLElement,
 		uuid: string,
@@ -1263,6 +1345,7 @@ export default class BlockReferenceEnhancer extends Plugin {
 		component: Component,
 		visitedEmbeds: Set<string>,
 		includeBackButton = true,
+		occurrenceKey: string | null = null,
 	) {
 		this.prepareEmbedContainer(container, uuid);
 
@@ -1303,10 +1386,12 @@ export default class BlockReferenceEnhancer extends Plugin {
 
 		const rootContainer = container.ownerDocument.createElement('div');
 		rootContainer.addClass('block-reference-embed-root');
-		await this.renderMarkdownAndProcess(rootContainer, block.rawContent, sourcePath, component, nextVisitedEmbeds);
+		const rootMarkdown = this.prepareEmbedMarkdownForRender(block.rawContent, true);
+		await this.renderMarkdownAndProcess(rootContainer, rootMarkdown, sourcePath, component, nextVisitedEmbeds);
 		contentNodes.push(rootContainer);
 
-		const childMarkdown = normalizeEmbedChildrenMarkdown(block.childrenMarkdown ?? '');
+		const normalizedChildMarkdown = normalizeEmbedChildrenMarkdown(block.childrenMarkdown ?? '');
+		const childMarkdown = this.prepareEmbedMarkdownForRender(normalizedChildMarkdown, false);
 		if (childMarkdown) {
 			const childrenContainer = container.ownerDocument.createElement('div');
 			childrenContainer.addClass('block-reference-embed-children');
@@ -1315,13 +1400,15 @@ export default class BlockReferenceEnhancer extends Plugin {
 		}
 
 		this.finalizeEmbedContainer(container, uuid, contentNodes, includeBackButton);
+		this.embedFoldStateService?.enhance(container, occurrenceKey);
 	}
 
 	async processRenderedReferences(
 		element: HTMLElement,
 		sourcePath: string,
 		component: Component,
-		visitedEmbeds: Set<string>
+		visitedEmbeds: Set<string>,
+		occurrenceResolver?: EmbedOccurrenceResolver,
 	) {
 		const previewRoot = element.isConnected ? this.resolveReadingModePreviewRoot(element) : null;
 		const probeRegex = createBlockReferenceRegex();
@@ -1350,6 +1437,7 @@ export default class BlockReferenceEnhancer extends Plugin {
 			const text = node.nodeValue;
 			const standaloneEmbedMatch = text.match(STANDALONE_EMBED_REGEX);
 			if (standaloneEmbedMatch) {
+				const occurrenceKey = occurrenceResolver?.(standaloneEmbedMatch[1]) ?? null;
 				const embedHost = node.ownerDocument.createElement('div');
 				const parentElement = node.parentElement;
 
@@ -1367,9 +1455,10 @@ export default class BlockReferenceEnhancer extends Plugin {
 						sourcePath,
 						component,
 						visitedEmbeds: new Set(visitedEmbeds),
+						occurrenceKey,
 					});
 				} else {
-					await this.populateEmbedContainer(embedHost, standaloneEmbedMatch[1], sourcePath, component, visitedEmbeds);
+					await this.populateEmbedContainer(embedHost, standaloneEmbedMatch[1], sourcePath, component, visitedEmbeds, true, occurrenceKey);
 				}
 				continue;
 			}

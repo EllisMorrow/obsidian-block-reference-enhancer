@@ -7,8 +7,8 @@ The plugin supports low-granularity block references and block embeds inside Obs
 <img alt="图片" src="https://github.com/user-attachments/assets/9aca75b9-056a-4a7e-bb62-6562f93deb03" />
 
 It is a display enhancer and renderer, and it also builds a local block index and automatically tracks additions, removals, and changes for block references and block embeds:
-- `((uuid))` is shown as an inline summary.
-- `{{embed ((uuid))}}` is shown as a full block embed with children.
+- `((uuid))` is shown as the complete first-line summary of its source block.
+- `{{embed ((uuid))}}` is shown as a full block embed with children and foldable outline nodes.
 - Original Markdown is not rewritten.
 - The plugin maintains its own local block index instead of relying on Obsidian search indexing.
 
@@ -25,8 +25,8 @@ It is a display enhancer and renderer, and it also builds a local block index an
 If your notes already use UUID-style blocks, this plugin makes them readable inside Obsidian without forcing you to rewrite your notes.
 
 You get:
-- Inline summaries for `((uuid))`
-- Full embeds for `{{embed ((uuid))}}`
+- Complete first-line summaries for `((uuid))`
+- Full embeds for `{{embed ((uuid))}}` with foldable outline nodes
 - A hover-only `Back` button that jumps references and embeds to their source blocks
 - Reference-count badges next to source blocks
 - A compact popover that shows where a block is referenced
@@ -89,7 +89,7 @@ You get:
 
 ### Inline references
 
-`((uuid))` is rendered as a short summary of the target block's first line.
+`((uuid))` is rendered as the complete first line of the target block. Long first lines wrap instead of being shortened with an ellipsis.
 
 Hover, focus, or click the rendered reference to keep a small `Back` button visible and jump to the source block.
 
@@ -100,6 +100,10 @@ Dense pages with many rendered references now keep a more conservative inline-re
 ### Block embeds
 
 `{{embed ((uuid))}}` is rendered as the target block plus its children.
+
+The embed root and every embedded outline item with children use a compact circular triangle in place of an extra list bullet. The control collapses or expands that node's children. Fold state is independent for each embed occurrence, works in Live Preview and Reading Mode, and is saved across restarts. Deleting or changing that embed occurrence removes its obsolete saved state; deleting plugin data resets all embedded outlines to expanded.
+
+Folding is view-only. Source-block edits still refresh every reference and embed with the newest indexed content, including content inside a currently collapsed branch.
 
 Hover, focus, or click the rendered embed to keep the same `Back` button visible and jump to the source block.
 
@@ -210,7 +214,7 @@ Rule notes:
 
 The default rule set already includes common properties such as id, collapsed, hl-*, and ls-type.
 
-This feature only hides matching property-line display under unordered-list blocks and does not modify the original Markdown.
+This feature hides matching property-line display under unordered-list blocks, including the same properties inside rendered block embeds, and does not modify the original Markdown.
 
 When this option is enabled, pressing `Enter` on a non-empty outline block in Live Preview behaves like this:
 - If the current block already has direct child list items, a new first child block is created.

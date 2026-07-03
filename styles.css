@@ -35,6 +35,87 @@
     margin-top: 0.35em;
 }
 
+.block-reference-embed .block-reference-foldable-item,
+.block-reference-embed .block-reference-embed-root-foldable {
+    position: relative;
+}
+
+.block-reference-embed li.block-reference-foldable-item {
+    list-style-type: none;
+}
+
+.block-reference-embed li.block-reference-foldable-item::marker {
+    content: "";
+}
+
+.block-reference-embed li.block-reference-foldable-item > .list-bullet {
+    display: none;
+}
+
+.block-reference-embed-fold-toggle {
+    position: absolute;
+    top: 0.12em;
+    left: -1.65em;
+    z-index: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.2em;
+    height: 1.2em;
+    padding: 0;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 50%;
+    background-color: var(--background-primary);
+    color: var(--text-muted);
+    font: inherit;
+    font-size: 0.82em;
+    line-height: 1;
+    cursor: pointer;
+    box-sizing: border-box;
+}
+
+.block-reference-embed-fold-toggle::before {
+    content: "";
+    width: 0;
+    height: 0;
+    border-top: 0.27em solid transparent;
+    border-bottom: 0.27em solid transparent;
+    border-left: 0.38em solid currentColor;
+    transform: rotate(90deg);
+    transition: transform 120ms ease;
+}
+
+.block-reference-embed-fold-toggle.is-collapsed::before {
+    transform: rotate(0deg);
+}
+
+.block-reference-embed-root-fold-toggle {
+    top: 0.2em;
+    left: -2.45em;
+}
+
+.block-reference-embed-fold-toggle:hover,
+.block-reference-embed-fold-toggle:focus-visible {
+    background-color: var(--background-modifier-hover);
+    color: var(--text-normal);
+    outline: none;
+}
+
+.markdown-source-view.mod-cm6 .cm-line:has(.block-reference-embed-root-fold-toggle) > .cm-formatting-list,
+.markdown-source-view.mod-cm6 .cm-line:has(.block-reference-embed-root-fold-toggle) > .list-bullet {
+    opacity: 0;
+}
+
+.markdown-reading-view li:has(> .block-reference-embed .block-reference-embed-root-fold-toggle),
+.markdown-preview-view li:has(> .block-reference-embed .block-reference-embed-root-fold-toggle) {
+    list-style-type: none;
+}
+
+.markdown-reading-view li:has(> .block-reference-embed .block-reference-embed-root-fold-toggle)::marker,
+.markdown-preview-view li:has(> .block-reference-embed .block-reference-embed-root-fold-toggle)::marker {
+    content: "";
+}
+
 .block-reference-inline-ref {
     position: relative;
     display: inline;

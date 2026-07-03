@@ -26,6 +26,11 @@ export interface BlockReferenceLocation {
     kind: 'inline' | 'embed';
 }
 
+export interface EmbedReferenceOccurrence extends BlockReferenceLocation {
+    blockId: string;
+    kind: 'embed';
+}
+
 export interface ReferencePreviewContext {
     parent?: string;
     current: string;

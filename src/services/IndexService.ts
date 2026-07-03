@@ -2,6 +2,7 @@ import { App, Events, TFile, debounce, normalizePath } from 'obsidian';
 import {
     BlockCache,
     BlockReferenceLocation,
+    EmbedReferenceOccurrence,
     FileIndexMeta,
     IndexBuildStats,
     IndexProgress,
@@ -206,6 +207,25 @@ export class IndexService extends Events {
 
     public getReferencesToBlock(id: string): BlockReferenceLocation[] {
         return [...(this.refsById.get(id) ?? [])];
+    }
+
+    public getEmbedReferenceOccurrences(): EmbedReferenceOccurrence[] {
+        const occurrences: EmbedReferenceOccurrence[] = [];
+        for (const [blockId, references] of this.refsById.entries()) {
+            for (const reference of references) {
+                if (reference.kind !== 'embed') {
+                    continue;
+                }
+
+                occurrences.push({
+                    ...reference,
+                    blockId,
+                    kind: 'embed',
+                });
+            }
+        }
+
+        return occurrences;
     }
 
     public getReferenceCount(id: string): number {

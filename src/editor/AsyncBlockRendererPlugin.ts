@@ -12,6 +12,7 @@ import { createBlockReferenceActionButtonsElement } from "src/ui/BlockReferenceA
 import { isHtmlElement } from "src/utils/dom";
 import { replaceChildrenFromHtml } from "src/utils/html";
 import { getOpeningMarkdownFenceState, isClosingMarkdownFence, type MarkdownFenceState } from "src/utils/markdownFence";
+import { createEmbedOccurrenceKey } from "src/services/EmbedFoldStateService";
 
 interface BlockRenderTarget {
     from: number;
@@ -39,6 +40,7 @@ interface BlockRenderTarget {
     lineHeightPx?: number;
     reservedHeightPx?: number;
     indexRevision?: number;
+    propertySettingsRevision?: number;
 }
 
 interface RunningRenderTask {
@@ -109,11 +111,11 @@ function normalizeMeasuredPx(value?: number): number {
 }
 
 function buildTargetSignature(target: BlockRenderTarget): string {
-    return `${target.from}:${target.to}:${target.mode}:${target.uuid}:${target.stale ? 1 : 0}:${target.blockWidget ? 1 : 0}:${target.preserveListMarker ? 1 : 0}:${normalizeMeasuredPx(target.availableInlineWidthPx)}:${target.renderAsListItem ? 1 : 0}:${target.indentColumns ?? 0}:${normalizeMeasuredPx(target.listMarkerOffsetPx)}:${normalizeMeasuredPx(target.listContentOffsetPx)}:${target.revealPos ?? -1}:${target.revealFrom ?? -1}:${target.revealTo ?? -1}:${target.cardPos ?? -1}:${target.refId ?? ""}:${normalizeMeasuredPx(target.lineHeightPx)}:${target.indexRevision ?? -1}`;
+    return `${target.from}:${target.to}:${target.mode}:${target.uuid}:${target.stale ? 1 : 0}:${target.blockWidget ? 1 : 0}:${target.preserveListMarker ? 1 : 0}:${normalizeMeasuredPx(target.availableInlineWidthPx)}:${target.renderAsListItem ? 1 : 0}:${target.indentColumns ?? 0}:${normalizeMeasuredPx(target.listMarkerOffsetPx)}:${normalizeMeasuredPx(target.listContentOffsetPx)}:${target.revealPos ?? -1}:${target.revealFrom ?? -1}:${target.revealTo ?? -1}:${target.cardPos ?? -1}:${target.refId ?? ""}:${normalizeMeasuredPx(target.lineHeightPx)}:${target.indexRevision ?? -1}:${target.propertySettingsRevision ?? -1}`;
 }
 
 function buildRenderSignature(target: BlockRenderTarget): string {
-    return `${target.from}:${target.to}:${target.mode}:${target.uuid}:${target.stale ? 1 : 0}:${target.preserveListMarker ? 1 : 0}:${normalizeMeasuredPx(target.availableInlineWidthPx)}:${target.renderAsListItem ? 1 : 0}:${target.refId ?? ""}:${normalizeMeasuredPx(target.listMarkerOffsetPx)}:${normalizeMeasuredPx(target.listContentOffsetPx)}:${normalizeMeasuredPx(target.lineHeightPx)}:${target.indexRevision ?? -1}`;
+    return `${target.from}:${target.to}:${target.mode}:${target.uuid}:${target.stale ? 1 : 0}:${target.preserveListMarker ? 1 : 0}:${normalizeMeasuredPx(target.availableInlineWidthPx)}:${target.renderAsListItem ? 1 : 0}:${target.refId ?? ""}:${normalizeMeasuredPx(target.listMarkerOffsetPx)}:${normalizeMeasuredPx(target.listContentOffsetPx)}:${normalizeMeasuredPx(target.lineHeightPx)}:${target.indexRevision ?? -1}:${target.propertySettingsRevision ?? -1}`;
 }
 
 function getTargetRefId(target: BlockRenderTarget): string {
@@ -284,11 +286,16 @@ export function createAsyncBlockRendererPlugin(plugin: BlockReferenceEnhancer) {
             private runningEmbedRenderCount = 0;
             private visibleWidgetStates: Map<string, VisibleWidgetState> = new Map();
             private indexUpdatedRef: EventRef;
+            private propertySettingsChangedRef: EventRef;
 
             constructor(private view: EditorView) {
                 this.component = new Component();
                 plugin.addChild(this.component);
                 this.indexUpdatedRef = plugin.indexService.on("index-updated", () => {
+                    this.lastScanFingerprint = "";
+                    this.scheduleScan(LIVE_PREVIEW_VIEWPORT_SCAN_DEBOUNCE_MS);
+                });
+                this.propertySettingsChangedRef = plugin.onLogseqPropertySettingsChanged(() => {
                     this.lastScanFingerprint = "";
                     this.scheduleScan(LIVE_PREVIEW_VIEWPORT_SCAN_DEBOUNCE_MS);
                 });
@@ -360,6 +367,7 @@ export function createAsyncBlockRendererPlugin(plugin: BlockReferenceEnhancer) {
                 this.component.unload();
                 this.runningRenders.forEach(({ controller }) => controller.abort());
                 plugin.indexService.offref(this.indexUpdatedRef);
+                plugin.offLogseqPropertySettingsChanged(this.propertySettingsChangedRef);
             }
 
             private getViewDocument(): Document {
@@ -955,6 +963,7 @@ export function createAsyncBlockRendererPlugin(plugin: BlockReferenceEnhancer) {
                     this.view.hasFocus ? 1 : 0,
                     contentWidth,
                     plugin.indexService.getIndexRevision(),
+                    plugin.getLogseqPropertySettingsRevision(),
                 ].join(":");
 
                 if (scanFingerprint === this.lastScanFingerprint) {
@@ -964,6 +973,7 @@ export function createAsyncBlockRendererPlugin(plugin: BlockReferenceEnhancer) {
                 this.lastScanFingerprint = scanFingerprint;
                 this.syncRevealedEmbedTarget(this.cachedTargets);
                 const indexRevision = plugin.indexService.getIndexRevision();
+                const propertySettingsRevision = plugin.getLogseqPropertySettingsRevision();
                 const desiredTargets: BlockRenderTarget[] = [];
                 const nextRevealedInlineReferences = new Map<string, RevealedInlineReferenceState>();
 
@@ -981,6 +991,7 @@ export function createAsyncBlockRendererPlugin(plugin: BlockReferenceEnhancer) {
                     const measuredTarget = {
                         ...this.measureRenderTarget(target),
                         indexRevision,
+                        propertySettingsRevision,
                     };
                     const revealSource = this.shouldRevealSource(measuredTarget);
                     if (revealSource) {
@@ -1162,7 +1173,15 @@ export function createAsyncBlockRendererPlugin(plugin: BlockReferenceEnhancer) {
                     }
 
                     const sourcePath = this.view.state.field(editorInfoField).file?.path ?? "";
-                    const embedInnerHtml = await plugin.buildEmbedHtml(target.uuid, sourcePath, this.component);
+                    const syntaxPos = target.revealPos ?? target.from;
+                    const syntaxLine = this.view.state.doc.lineAt(syntaxPos);
+                    const occurrenceKey = createEmbedOccurrenceKey({
+                        filePath: sourcePath,
+                        line: syntaxLine.number - 1,
+                        ch: syntaxPos - syntaxLine.from,
+                        uuid: target.uuid,
+                    });
+                    const embedInnerHtml = await plugin.buildEmbedHtml(target.uuid, sourcePath, this.component, occurrenceKey);
                     const html = `<div class="block-reference-live-preview-embed-layout"><div class="block-reference-embed block-reference-live-preview-embed-card">${embedInnerHtml}</div></div>`;
 
                     if (controller.signal.aborted) {

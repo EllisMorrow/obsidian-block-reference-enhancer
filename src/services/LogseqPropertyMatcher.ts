@@ -147,3 +147,30 @@ export function collectHiddenLogseqPropertyLineNumbers(
 
 	return hiddenLines;
 }
+
+export function filterHiddenLogseqPropertyLinesForEmbed(
+	markdown: string,
+	matcher: HiddenLogseqPropertyMatcher,
+	assumeRootBlock: boolean,
+): string {
+	if (!markdown || matcher.rules.length === 0) {
+		return markdown;
+	}
+
+	const lines = markdown.split(/\r?\n/);
+	if (lines.length === 0) {
+		return markdown;
+	}
+
+	const classificationLines = assumeRootBlock
+		? [`- ${lines[0] ?? ''}`, ...lines.slice(1)]
+		: lines;
+	const hiddenLineNumbers = collectHiddenLogseqPropertyLineNumbers(classificationLines.join('\n'), matcher);
+	if (hiddenLineNumbers.size === 0) {
+		return markdown;
+	}
+
+	return lines
+		.filter((_line, index) => !hiddenLineNumbers.has(index + 1))
+		.join('\n');
+}
