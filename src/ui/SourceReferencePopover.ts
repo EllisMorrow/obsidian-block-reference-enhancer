@@ -14,6 +14,7 @@ export class SourceReferencePopover {
     private currentDocument: Document | null = null;
     private currentWindow: Window | null = null;
     private currentPage = 0;
+    private detailsCollapsed = false;
     private renderToken = 0;
     private listenersAttached = false;
     private readonly handleDocumentPointerDown = (event: MouseEvent) => {
@@ -106,6 +107,7 @@ export class SourceReferencePopover {
         this.currentDocument = null;
         this.currentWindow = null;
         this.currentPage = 0;
+        this.detailsCollapsed = false;
     }
 
     destroy() {
@@ -267,22 +269,29 @@ export class SourceReferencePopover {
 
         const header = this.containerEl.createDiv({ cls: 'block-reference-source-popover-header' });
         const headerMain = header.createDiv({ cls: 'block-reference-source-popover-header-main' });
+        const title = this.plugin.resolveReferencePreviewText(this.plugin.getBlockSummary(block));
         const titleEl = headerMain.createDiv({
             cls: 'block-reference-source-popover-title',
-            text: this.plugin.getBlockSummary(block),
+            text: title,
         });
-        titleEl.title = this.plugin.getBlockSummary(block);
-        headerMain.createDiv({
+        titleEl.title = title;
+
+        const headerActions = headerMain.createDiv({ cls: 'block-reference-source-popover-header-actions' });
+        const detailsButton = headerActions.createEl('button', {
+            cls: 'block-reference-source-popover-details-toggle',
+            attr: {
+                type: 'button',
+            },
+        });
+        detailsButton.addEventListener('click', () => {
+            this.detailsCollapsed = !this.detailsCollapsed;
+            this.updateDetailsState(detailsButton);
+        });
+        headerActions.createDiv({
             cls: 'block-reference-source-popover-count',
             text: this.getReferenceCountLabel(pageData.total),
         });
-
-        const headerMeta = header.createDiv({ cls: 'block-reference-source-popover-header-meta' });
-        const blockIdEl = headerMeta.createSpan({
-            cls: 'block-reference-source-popover-block-id',
-            text: this.getShortBlockId(blockId),
-        });
-        blockIdEl.title = blockId;
+        this.updateDetailsState(detailsButton);
 
         const list = this.containerEl.createDiv({ cls: 'block-reference-source-popover-list' });
         for (const item of items) {
@@ -292,9 +301,9 @@ export class SourceReferencePopover {
                 attr: {
                     role: 'button',
                     tabindex: '0',
+                    'aria-label': `${this.getReferenceKindLabel(item.reference.kind)} ${fileName}, line ${item.reference.line + 1}`,
                 },
             });
-            row.title = `${item.reference.filePath}:${item.reference.line + 1}`;
             this.bindReferenceRowEvents(row, item.reference);
 
             const headerRow = row.createDiv({ cls: 'block-reference-source-popover-item-header' });
@@ -308,21 +317,12 @@ export class SourceReferencePopover {
                 cls: 'block-reference-source-popover-item-file',
                 text: fileName,
             });
-            fileNameEl.title = item.reference.filePath;
             locationRow.createSpan({
                 cls: 'block-reference-source-popover-item-line',
                 text: `L${item.reference.line + 1}`,
             });
 
             this.renderPreviewContext(row, item.previewContext);
-
-            if (fileName !== item.reference.filePath) {
-                const fullPathEl = row.createDiv({
-                    cls: 'block-reference-source-popover-item-path',
-                    text: item.reference.filePath,
-                });
-                fullPathEl.title = item.reference.filePath;
-            }
         }
 
         const pageCount = Math.max(Math.ceil(pageData.total / pageData.pageSize), 1);
@@ -420,16 +420,21 @@ export class SourceReferencePopover {
         return segments[segments.length - 1] || filePath;
     }
 
-    private getShortBlockId(blockId: string): string {
-        if (blockId.length <= 18) {
-            return blockId;
-        }
-
-        return `${blockId.slice(0, 8)}...${blockId.slice(-6)}`;
-    }
-
     private getReferenceCountLabel(total: number): string {
         return total === 1 ? '1 ref' : `${total} refs`;
+    }
+
+    private updateDetailsState(button: HTMLButtonElement) {
+        if (!this.containerEl) {
+            return;
+        }
+
+        const expanded = !this.detailsCollapsed;
+        this.containerEl.classList.toggle('is-details-collapsed', this.detailsCollapsed);
+        button.empty();
+        button.setAttribute('aria-expanded', String(expanded));
+        button.setAttribute('aria-label', expanded ? 'Collapse reference details' : 'Expand reference details');
+        setIcon(button, expanded ? 'chevron-up' : 'chevron-down');
     }
 
     private bindReferenceRowEvents(row: HTMLDivElement, reference: BlockReferenceLocation) {

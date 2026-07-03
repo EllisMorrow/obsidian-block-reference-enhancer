@@ -119,8 +119,8 @@ Clicking the badge opens a compact reference popover with:
 - file name
 - line number
 - reference type
-- preview text
-- full path
+- parent, current, and child context previews with UUID syntax resolved to readable source summaries
+- a header toggle that collapses the list to reference type and file name only
 
 If the same UUID exists as an active source block in multiple files, each active source location shows the same reference-count badge.
 

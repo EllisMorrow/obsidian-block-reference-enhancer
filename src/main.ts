@@ -21,6 +21,7 @@ import { DEFAULT_HIDDEN_LOGSEQ_PROPERTY_KEYS, HiddenLogseqPropertyMatcher, build
 import { OutlinePasteController } from './services/OutlinePasteController';
 import { canCopyCurrentLevelAndChildren, copyCurrentLevelAndChildren } from './services/OutlineSubtreeCopyController';
 import { containsUuidBlockSyntaxOutsideCode, convertUuidSelectionToText, UuidSelectionCopyError } from './services/UuidSelectionCopyService';
+import { resolveReferencePreviewText } from './services/ReferencePreviewText';
 import { normalizeEmbedChildrenMarkdown } from './utils/blockMarkdown';
 import {
 	createEmbedOccurrenceKey,
@@ -1598,6 +1599,15 @@ export default class BlockReferenceEnhancer extends Plugin {
 		return firstLine && firstLine.length > 0 ? firstLine : '[empty block]';
 	}
 
+	resolveReferencePreviewText(text: string): string {
+		return resolveReferencePreviewText(text, {
+			resolveSummary: (uuid) => {
+				const block = this.indexService.getBlock(uuid);
+				return block ? this.getBlockSummary(block) : null;
+			},
+		});
+	}
+
 	async getReferencePreviewContexts(
 		references: readonly BlockReferenceLocation[],
 		maxLength = 140,
@@ -1650,12 +1660,12 @@ export default class BlockReferenceEnhancer extends Plugin {
 		const currentListItem = this.parseReferencePreviewListItem(lineText);
 		if (!currentListItem) {
 			return {
-				current: this.truncateReferencePreviewText(lineText.trim(), maxLength),
+				current: this.formatReferencePreviewText(lineText, maxLength),
 			};
 		}
 
 		const context: ReferencePreviewContext = {
-			current: this.truncateReferencePreviewText(currentListItem.content, maxLength),
+			current: this.formatReferencePreviewText(currentListItem.content, maxLength),
 		};
 		const parent = this.findReferencePreviewParent(lines, lineNumber, currentListItem.indentColumns, maxLength);
 		if (parent) {
@@ -1688,7 +1698,7 @@ export default class BlockReferenceEnhancer extends Plugin {
 			}
 
 			if (listItem.indentColumns < currentIndentColumns) {
-				return this.truncateReferencePreviewText(listItem.content, maxLength);
+				return this.formatReferencePreviewText(listItem.content, maxLength);
 			}
 		}
 
@@ -1716,7 +1726,7 @@ export default class BlockReferenceEnhancer extends Plugin {
 				return undefined;
 			}
 
-			return this.truncateReferencePreviewText(listItem.content, maxLength);
+			return this.formatReferencePreviewText(listItem.content, maxLength);
 		}
 
 		return undefined;
@@ -1754,6 +1764,10 @@ export default class BlockReferenceEnhancer extends Plugin {
 		}
 
 		return trimmedText.length > maxLength ? `${trimmedText.slice(0, maxLength).trimEnd()}…` : trimmedText;
+	}
+
+	private formatReferencePreviewText(text: string, maxLength: number): string {
+		return this.truncateReferencePreviewText(this.resolveReferencePreviewText(text), maxLength);
 	}
 
 	async openReferenceLocation(reference: BlockReferenceLocation) {
