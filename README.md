@@ -35,6 +35,7 @@ You get:
 - A selection context-menu action that copies rendered UUID references and embeds as readable Markdown outline text
 - Hidden Logseq-style outline property lines such as `id::`, `collapsed::`, and `hl-*::`
 - Experimental right-click outline paste for unordered-list blocks
+- Experimental whitelist-based synchronization between Logseq page properties and Obsidian YAML frontmatter
 - Saved source-block edits automatically refresh existing references and embeds
 - Dense pages with many rendered references and embeds use a more stable inline rendering strategy to reduce scroll and tab-switch jitter
 - A local cache and block index for large vaults
@@ -248,6 +249,57 @@ Behavior:
 - The original file and outline location are captured before processing; switching pages does not redirect the final insertion
 - If the original target is deleted or becomes ambiguous while processing, insertion is cancelled instead of writing to the wrong place
 - Content beyond the hard safety limits is rejected without inserting partial output
+
+## 🔄 Logseq ↔ Obsidian Page Properties (Experimental)
+
+The settings page includes an isolated experimental section:
+- `Logseq ↔ Obsidian page properties (Experimental)`
+- `Keep Logseq and Obsidian page properties in sync` is off by default
+
+It can maintain both physical page-property formats in the same Markdown file:
+
+```md
+---
+aliases:
+  - Example alias
+---
+
+alias:: Example alias
+```
+
+The whitelist is the only mutation boundary. Its default rule is:
+
+```text
+alias<->aliases
+```
+
+Rules:
+- Write one rule per line
+- `alias<->aliases` maps Logseq `alias` to YAML `aliases`
+- A single key such as `tags` uses the same name on both sides
+- The built-in alias mapping supports string lists; custom mappings support one-line strings only
+- Block-level keys including `id`, `collapsed`, `created-at`, and `updated-at` are protected
+- Logseq and YAML properties outside the whitelist are left unchanged
+
+Actions:
+- `Sync current file` only processes the active Markdown file
+- `Selected folders` accepts one vault-relative folder per line; `.` means the whole vault
+- `Scan and sync selected folders…` scans and shows a summary before any batch write
+- Batch work can be cancelled; completed files stay changed and remaining files are not written
+
+When both formats changed and their order cannot be determined reliably, the plugin does not overwrite either side silently. It asks for one of:
+- `Use Obsidian YAML`
+- `Use Logseq properties`
+- `Skip`
+
+If Logseq turns top-of-file YAML into an unordered-list block, enabling this feature allows strict event-driven repair inside selected folders. Repair only runs when the candidate YAML parses safely, contains whitelisted evidence, and leaves the body unchanged. Ambiguous files are skipped.
+
+The danger zone provides `Remove safe YAML and disable sync…`:
+- YAML is removed only when all of it is represented equivalently by Logseq page properties
+- Files with YAML-only keys, complex values, parse errors, or conflicts stay unchanged and appear in the report
+- Sync is disabled afterward, and the latest three safe-cleanup recovery records are retained
+
+This experimental feature modifies Markdown source. Back up the vault before the first batch run. Version 1 does not support wildcards, nested YAML, automatic two-way sync on every save, or forced deletion of unsafe YAML.
 
 ## 📦 First Launch and Indexing
 

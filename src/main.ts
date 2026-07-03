@@ -29,23 +29,33 @@ import {
 	type PersistedEmbedFoldState,
 } from './services/EmbedFoldStateService';
 import { createInlineReferenceSummary } from './services/InlineReferenceSummary';
+import { DualPropertySyncService } from './services/DualPropertySyncService';
+import { DEFAULT_DUAL_PROPERTY_WHITELIST } from './dual-property-sync/rules';
+import type { PersistedDualPropertySyncState } from './dual-property-sync/types';
 
 export interface BlockReferenceEnhancerSettings {
 	hideLogseqProperties: boolean;
 	hiddenLogseqPropertyKeys: string;
 	enablePasteClipboardAsOutline: boolean;
+	enableDualPagePropertySync: boolean;
+	dualPagePropertyWhitelist: string;
+	dualPagePropertyFolders: string;
 }
 
 interface BlockReferenceEnhancerPersistedData {
 	settings?: Partial<BlockReferenceEnhancerSettings>;
 	indexCache?: PersistedIndexCacheV4 | PersistedIndexCacheV3 | LegacyPersistedBlockCacheEntry[] | null;
 	embedFoldState?: PersistedEmbedFoldState;
+	dualPropertySyncState?: PersistedDualPropertySyncState;
 }
 
 const DEFAULT_SETTINGS: BlockReferenceEnhancerSettings = {
 	hideLogseqProperties: true,
 	hiddenLogseqPropertyKeys: DEFAULT_HIDDEN_LOGSEQ_PROPERTY_KEYS,
 	enablePasteClipboardAsOutline: false,
+	enableDualPagePropertySync: false,
+	dualPagePropertyWhitelist: DEFAULT_DUAL_PROPERTY_WHITELIST,
+	dualPagePropertyFolders: '',
 };
 
 const STANDALONE_EMBED_REGEX = /^\s*\{\{embed\s+\(\(([A-Za-z0-9_-]{36,})\)\)\s*\}\}\s*$/;
@@ -141,6 +151,7 @@ export default class BlockReferenceEnhancer extends Plugin {
 	private sourceReferencePopover: SourceReferencePopover | null = null;
 	private outlinePasteController: OutlinePasteController | null = null;
 	private embedFoldStateService: EmbedFoldStateService | null = null;
+	private dualPropertySyncService: DualPropertySyncService | null = null;
 	private persistedData: BlockReferenceEnhancerPersistedData = {};
 	private editorContextMenuTarget: EditorContextMenuTarget | null = null;
 	private hiddenLogseqPropertyMatcher: HiddenLogseqPropertyMatcher = buildHiddenLogseqPropertyMatcher(DEFAULT_HIDDEN_LOGSEQ_PROPERTY_KEYS);
@@ -181,6 +192,25 @@ export default class BlockReferenceEnhancer extends Plugin {
 
 	async onload() {
 		await this.loadSettings();
+		this.dualPropertySyncService = new DualPropertySyncService(
+			this.app,
+			this.persistedData.dualPropertySyncState,
+			{
+				getSettings: () => this.settings,
+				saveState: async (dualPropertySyncState) => {
+					this.persistedData = {
+						...this.persistedData,
+						settings: this.settings,
+						dualPropertySyncState,
+					};
+					await this.saveData(this.persistedData);
+				},
+				disableSync: async () => {
+					this.settings.enableDualPagePropertySync = false;
+					await this.saveSettings(false);
+				},
+			},
+		);
 		this.embedFoldStateService = new EmbedFoldStateService(this.persistedData.embedFoldState, async (embedFoldState) => {
 			this.persistedData = {
 				...this.persistedData,
@@ -236,6 +266,22 @@ export default class BlockReferenceEnhancer extends Plugin {
 			name: 'Review missing source blocks',
 			callback: () => {
 				this.openStaleBlockReview();
+			},
+		});
+
+		this.addCommand({
+			id: 'sync-logseq-obsidian-page-properties-current-file',
+			name: 'Sync Logseq and Obsidian page properties in current file',
+			callback: () => {
+				void this.syncDualPagePropertiesCurrentFile();
+			},
+		});
+
+		this.addCommand({
+			id: 'sync-logseq-obsidian-page-properties-selected-folders',
+			name: 'Scan and sync Logseq and Obsidian page properties in selected folders',
+			callback: () => {
+				void this.scanAndSyncDualPagePropertyFolders();
 			},
 		});
 
@@ -354,6 +400,8 @@ export default class BlockReferenceEnhancer extends Plugin {
 	}
 
 	onunload() {
+		this.dualPropertySyncService?.dispose();
+		this.dualPropertySyncService = null;
 		this.embedFoldStateService?.dispose();
 		this.embedFoldStateService = null;
 		this.outlinePasteController?.dispose();
@@ -396,6 +444,9 @@ export default class BlockReferenceEnhancer extends Plugin {
 		));
 
 		this.setupFileEvents();
+		this.registerEvent(this.app.workspace.on('file-open', (file) => {
+			this.dualPropertySyncService?.handleFileOpened(file);
+		}));
 		this.refreshOpenMarkdownViews();
 	}
 
@@ -403,24 +454,29 @@ export default class BlockReferenceEnhancer extends Plugin {
 		this.registerEvent(this.app.vault.on('create', (file) => {
 			if (file instanceof TFile && file.extension === 'md') {
 				void this.indexService.processFileChange(file);
+				this.dualPropertySyncService?.handleFileChanged(file);
 			}
 		}));
 
 		this.registerEvent(this.app.vault.on('modify', (file) => {
 			if (file instanceof TFile && file.extension === 'md') {
 				void this.indexService.processFileChange(file);
+				this.dualPropertySyncService?.handleFileChanged(file);
 			}
 		}));
 
 		this.registerEvent(this.app.vault.on('delete', (file) => {
 			if (file instanceof TFile && file.extension === 'md') {
 				void this.indexService.processFileDelete(file.path);
+				this.dualPropertySyncService?.handleFileDeleted(file.path);
 			}
 		}));
 
 		this.registerEvent(this.app.vault.on('rename', (file, oldPath) => {
 			if (file instanceof TFile && file.extension === 'md') {
 				void this.indexService.processFileRename(oldPath, file.path);
+				this.dualPropertySyncService?.handleFileRenamed(oldPath, file.path);
+				this.dualPropertySyncService?.handleFileChanged(file);
 			}
 		}));
 	}
@@ -440,20 +496,36 @@ export default class BlockReferenceEnhancer extends Plugin {
 		this.syncHiddenLogseqPropertyMatcher();
 	}
 
-	async saveSettings() {
-		this.syncHiddenLogseqPropertyMatcher();
+	async saveSettings(refreshLogseqProperties = true) {
+		if (refreshLogseqProperties) {
+			this.syncHiddenLogseqPropertyMatcher();
+		}
 		this.persistedData = {
 			...this.persistedData,
 			settings: this.settings,
 		};
 		await this.saveData(this.persistedData);
-		this.logseqPropertySettingsRevision += 1;
-		this.logseqPropertyEvents.trigger('changed');
-		this.refreshOpenMarkdownViews();
+		if (refreshLogseqProperties) {
+			this.logseqPropertySettingsRevision += 1;
+			this.logseqPropertyEvents.trigger('changed');
+			this.refreshOpenMarkdownViews();
+		}
 	}
 
 	private isPersistedData(value: unknown): value is BlockReferenceEnhancerPersistedData {
-		return !!value && typeof value === 'object' && ('settings' in value || 'indexCache' in value || 'embedFoldState' in value);
+		return !!value && typeof value === 'object' && ('settings' in value || 'indexCache' in value || 'embedFoldState' in value || 'dualPropertySyncState' in value);
+	}
+
+	async syncDualPagePropertiesCurrentFile() {
+		await this.dualPropertySyncService?.syncCurrentFile(this.app.workspace.getActiveFile());
+	}
+
+	async scanAndSyncDualPagePropertyFolders() {
+		await this.dualPropertySyncService?.scanAndSyncSelectedFolders();
+	}
+
+	async returnDualPagePropertyFoldersToLogseqOnly() {
+		await this.dualPropertySyncService?.returnSelectedFoldersToLogseqOnly();
 	}
 
 	private reconcileEmbedFoldState() {

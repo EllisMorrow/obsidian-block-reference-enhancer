@@ -35,6 +35,7 @@ English documentation is available in [README.md](./README.md).
 - 将框选区域里的 UUID 块引用、块嵌入复制为可读 Markdown 大纲文本的右键菜单
 - 可隐藏 Logseq 风格大纲属性行，例如 `id::`、`collapsed::`、`hl-*::`
 - 面向无序列表块的实验性“右键贴入为大纲”
+- 通过白名单手动同步 Logseq 页属性与 Obsidian YAML 页头的实验功能
 - 源块内容保存后，已有块引用和块嵌入会自动同步刷新
 - 在块引用、块嵌入非常密集的页面里，会用更稳定的行内渲染策略来减少滚动和切页时的抖动
 - 面向大库的本地索引和缓存
@@ -252,6 +253,57 @@ Obsidian 打开命令面板快捷键：
 - 开始处理前会记录原文件与大纲位置；即使处理中切换页面，结果仍写回原位置
 - 如果处理中原目标被删除或无法唯一定位，会取消写入，不会误贴到其他位置
 - 超过硬安全上限的内容会直接拒绝，且不会插入半成品
+
+## 🔄 Logseq ↔ Obsidian 页头属性双写同步（实验性）
+
+插件设置页提供了独立的实验功能区：
+- `Logseq ↔ Obsidian page properties (Experimental)`
+- 主开关 `Keep Logseq and Obsidian page properties in sync` 默认关闭
+
+它可以让同一篇 Markdown 同时保留：
+
+```md
+---
+aliases:
+  - 示例别名
+---
+
+alias:: 示例别名
+```
+
+这个功能以白名单为唯一处理边界。默认规则只有：
+
+```text
+alias<->aliases
+```
+
+规则说明：
+- 每行填写一条规则
+- `alias<->aliases` 表示 Logseq 使用 `alias`，YAML 使用 `aliases`
+- 单独填写 `tags` 表示两边都使用 `tags`
+- 内置 alias 映射支持字符串列表；自定义规则只处理单行字符串
+- `id`、`collapsed`、`created-at`、`updated-at` 等块级属性受到保护，不能加入同步
+- 不在白名单里的 Logseq 和 YAML 属性不会被修改
+
+使用方式：
+- `Sync current file`：只处理当前 Markdown 文件
+- `Selected folders`：每行填写一个库内相对文件夹，`.` 表示整个库
+- `Scan and sync selected folders…`：先扫描并显示摘要，确认后才批量写入
+- 批量任务可取消；已经改变的文件会保留，尚未处理的文件不会继续写入
+
+当 YAML 和 Logseq 两侧都被修改且无法可靠判断先后顺序时，插件不会静默覆盖，而是要求逐个选择：
+- `Use Obsidian YAML`
+- `Use Logseq properties`
+- `Skip`
+
+如果 Logseq 把文件顶部的 YAML 错误转换成无序列表，主开关开启后，插件会在所选文件夹内对打开或修改的文件做严格检测。只有候选 YAML 可以安全解析、命中白名单且正文不会被改变时才自动修复；不确定的文件只会被跳过。
+
+安全退出区提供 `Remove safe YAML and disable sync…`：
+- 只有 YAML 的全部内容都已由等价 Logseq 页属性表达时才会删除 YAML
+- 有 YAML 独有键、复杂值、解析错误或冲突的文件会保持不变并出现在报告中
+- 操作后会关闭同步功能，并保留最近三次安全清理的恢复记录
+
+这是会修改 Markdown 原文的实验功能。首次批量使用前应备份笔记库；首版不支持通配符、嵌套 YAML、自动保存时双向同步或强制删除不安全 YAML。
 
 ## 📦 首次启动与索引
 

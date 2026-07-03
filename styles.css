@@ -849,3 +849,11 @@
     opacity: 1;
     pointer-events: auto;
 }
+.block-reference-dual-property-conflicts {
+	max-height: 60vh;
+	overflow-y: auto;
+}
+
+.block-reference-dual-property-cancel {
+	margin-inline-start: var(--size-4-2);
+}
