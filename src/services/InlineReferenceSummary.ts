@@ -1,3 +1,5 @@
+import { t } from '../i18n';
+
 export function createInlineReferenceSummary(expandedLine: string): string {
 	const plainText = expandedLine
 		.replace(/!\[\[([^\]]+)\]\]/g, '$1')
@@ -9,5 +11,5 @@ export function createInlineReferenceSummary(expandedLine: string): string {
 		.replace(/\s+/g, ' ')
 		.trim();
 
-	return plainText || '[empty block]';
+	return plainText || t('render.emptyBlockBracketed');
 }

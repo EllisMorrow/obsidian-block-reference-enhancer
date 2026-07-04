@@ -13,6 +13,7 @@ import { isHtmlElement } from "src/utils/dom";
 import { replaceChildrenFromHtml } from "src/utils/html";
 import { getOpeningMarkdownFenceState, isClosingMarkdownFence, type MarkdownFenceState } from "src/utils/markdownFence";
 import { createEmbedOccurrenceKey } from "src/services/EmbedFoldStateService";
+import { t } from "src/i18n";
 
 interface BlockRenderTarget {
     from: number;
@@ -1097,7 +1098,7 @@ export function createAsyncBlockRendererPlugin(plugin: BlockReferenceEnhancer) {
                     inlineRenderEffects.push(setRenderedWidgetEffect.of({
                         from: target.from,
                         to: target.to,
-                        content: inlineInfo.text ?? "[missing block]",
+                        content: inlineInfo.text ?? t('render.missingBlockBracketed'),
                         mode: "inline",
                         interaction: {
                             from: target.from,
@@ -1145,7 +1146,7 @@ export function createAsyncBlockRendererPlugin(plugin: BlockReferenceEnhancer) {
                 try {
                     if (target.mode === "inline") {
                         const inlineInfo = plugin.getInlineReferenceInfo(target.uuid);
-                        const summary = inlineInfo.text ?? "[missing block]";
+						const summary = inlineInfo.text ?? t('render.missingBlockBracketed');
 
                         if (controller.signal.aborted) {
                             return;

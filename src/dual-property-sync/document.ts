@@ -5,6 +5,7 @@ import {
 	normalizeRuleValue,
 	serializeLogseqRuleValue,
 } from './rules';
+import { t } from '../i18n';
 import type {
 	DualPropertySideValues,
 	DualPropertySyncRule,
@@ -147,18 +148,18 @@ export function repairBulletizedYaml(
 			break;
 		}
 		if (lines[index] && !lines[index].startsWith('  ')) {
-			return { status: 'unsafe', content, reason: 'The bulletized YAML header has inconsistent indentation.' };
+			return { status: 'unsafe', content, reason: t('validation.yaml.inconsistentIndent') };
 		}
 	}
 	if (closingIndex < 1) {
-		return { status: 'unsafe', content, reason: 'The bulletized YAML closing delimiter was not found.' };
+		return { status: 'unsafe', content, reason: t('validation.yaml.missingBulletizedClose') };
 	}
 
 	const yamlLines = lines.slice(1, closingIndex).map((line) => line.startsWith('  ') ? line.slice(2) : line);
 	const yamlSource = yamlLines.join('\n');
 	const yamlDocument = parseDocument(yamlSource, { prettyErrors: false, keepSourceTokens: true });
 	if (yamlDocument.errors.length > 0 || !isMap(yamlDocument.contents)) {
-		return { status: 'unsafe', content, reason: 'The de-indented YAML is not a valid top-level mapping.' };
+		return { status: 'unsafe', content, reason: t('validation.yaml.invalidMapping') };
 	}
 
 	const yamlKeys = new Set(yamlDocument.contents.items.map((pair) => {
@@ -179,7 +180,7 @@ export function repairBulletizedYaml(
 		return yamlKeys.has(rule.yamlKey) || pagePropertyKeys.has(rule.logseqKey);
 	});
 	if (!hasManagedEvidence) {
-		return { status: 'unsafe', content, reason: 'No whitelisted page property was found in the damaged header.' };
+		return { status: 'unsafe', content, reason: t('validation.yaml.noWhitelistedProperty') };
 	}
 
 	const repairedLines = [
@@ -210,13 +211,13 @@ function parsePageProperties(content: string): ParsedPageProperties {
 			}
 		}
 		if (!closingLine) {
-			errors.push('YAML frontmatter does not have a closing delimiter.');
+			errors.push(t('validation.yaml.missingClose'));
 		} else {
 			const yamlStart = lines[openingLineIndex].fullEnd;
 			const yamlSource = content.slice(yamlStart, closingLine.start);
 			const document = parseDocument(yamlSource, { prettyErrors: false, keepSourceTokens: true });
 			if (document.errors.length > 0 || (document.contents !== null && !isMap(document.contents))) {
-				errors.push('YAML frontmatter must be a valid top-level mapping.');
+				errors.push(t('validation.yaml.mustBeMapping'));
 			}
 			frontmatter = {
 				start: lines[openingLineIndex].start,
@@ -271,7 +272,7 @@ function readYamlValues(
 			if (isSeq(node) && node.items.every(isScalar)) {
 				const items = node.items.map((item) => String(item.value));
 				if (items.some((item) => /[,，\r\n]/u.test(item))) {
-					errors.push(`YAML property ${rule.yamlKey} contains an alias that cannot be represented safely in one Logseq property line.`);
+					errors.push(t('validation.yaml.aliasUnsafe', { key: rule.yamlKey }));
 					continue;
 				}
 				values[rule.id] = items;
@@ -281,14 +282,14 @@ function readYamlValues(
 				values[rule.id] = normalizeRuleValue(rule, String(node.value));
 				continue;
 			}
-			errors.push(`YAML property ${rule.yamlKey} must be a scalar or scalar list.`);
+			errors.push(t('validation.yaml.scalarOrList', { key: rule.yamlKey }));
 			continue;
 		}
 
 		if (isScalar(node) && typeof node.value === 'string' && !/[\r\n]/u.test(node.value)) {
 			values[rule.id] = [node.value];
 		} else {
-			errors.push(`YAML property ${rule.yamlKey} must be a string.`);
+			errors.push(t('validation.yaml.stringOnly', { key: rule.yamlKey }));
 		}
 	}
 }
@@ -302,7 +303,7 @@ function readLogseqValues(
 	for (const rule of rules) {
 		const matching = properties.filter((property) => property.key === rule.logseqKey);
 		if (matching.length > 1) {
-			errors.push(`Logseq page property ${rule.logseqKey} appears more than once.`);
+			errors.push(t('validation.logseq.duplicate', { key: rule.logseqKey }));
 			continue;
 		}
 		if (matching.length === 1) {
@@ -368,7 +369,7 @@ function updateLogseqProperties(
 	for (const rule of rules) {
 		const matches = parsed.properties.filter((property) => property.key === rule.logseqKey);
 		if (matches.length > 1) {
-			return { content, changed: false, errors: [`Logseq page property ${rule.logseqKey} appears more than once.`] };
+			return { content, changed: false, errors: [t('validation.logseq.duplicate', { key: rule.logseqKey })] };
 		}
 		const serialized = serializeLogseqRuleValue(rule, targetValues[rule.id] ?? null);
 		if (matches.length === 1) {

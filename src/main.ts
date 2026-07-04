@@ -1,4 +1,4 @@
-import { CachedMetadata, Component, Editor, EventRef, Events, ListItemCache, MarkdownFileInfo, MarkdownPostProcessorContext, MarkdownRenderChild, MarkdownRenderer, MarkdownView, Menu, Notice, Plugin, TFile } from 'obsidian';
+import { CachedMetadata, Component, Editor, EventRef, Events, getLanguage, ListItemCache, MarkdownFileInfo, MarkdownPostProcessorContext, MarkdownRenderChild, MarkdownRenderer, MarkdownView, Menu, Notice, Plugin, TFile } from 'obsidian';
 import { EditorView } from '@codemirror/view';
 import { IndexService } from './services/IndexService';
 import { BlockSuggest } from './editor/BlockSuggest';
@@ -32,6 +32,7 @@ import { createInlineReferenceSummary } from './services/InlineReferenceSummary'
 import { DualPropertySyncService } from './services/DualPropertySyncService';
 import { DEFAULT_DUAL_PROPERTY_WHITELIST } from './dual-property-sync/rules';
 import type { PersistedDualPropertySyncState } from './dual-property-sync/types';
+import { initializeI18n, t } from './i18n';
 
 export interface BlockReferenceEnhancerSettings {
 	hideLogseqProperties: boolean;
@@ -191,6 +192,7 @@ export default class BlockReferenceEnhancer extends Plugin {
 	}
 
 	async onload() {
+		initializeI18n(typeof getLanguage === 'function' ? getLanguage() : 'en');
 		await this.loadSettings();
 		this.dualPropertySyncService = new DualPropertySyncService(
 			this.app,
@@ -235,11 +237,11 @@ export default class BlockReferenceEnhancer extends Plugin {
 		});
 		this.sourceReferencePopover = new SourceReferencePopover(this);
 		this.statusBarEl = this.addStatusBarItem();
-		this.setIndexStatusMessage('Block index: loading cache...');
+		this.setIndexStatusMessage(t('index.status.loadingCache'));
 
 		this.addCommand({
 			id: 'rebuild-block-reference-index',
-			name: 'Rebuild block reference index',
+			name: t('command.rebuildIndex'),
 			callback: () => {
 				void this.rebuildBlockReferenceIndex();
 			},
@@ -247,7 +249,7 @@ export default class BlockReferenceEnhancer extends Plugin {
 
 		this.addCommand({
 			id: 'copy-current-block-reference',
-			name: 'Copy current block reference',
+			name: t('command.copyReference'),
 			editorCallback: (editor: Editor, view: MarkdownView) => {
 				void this.handleCopyBlockReference(editor, view);
 			},
@@ -255,7 +257,7 @@ export default class BlockReferenceEnhancer extends Plugin {
 
 		this.addCommand({
 			id: 'copy-current-block-embed',
-			name: 'Copy current block embed',
+			name: t('command.copyEmbed'),
 			editorCallback: (editor: Editor, view: MarkdownView) => {
 				void this.handleCopyBlockEmbed(editor, view);
 			},
@@ -263,7 +265,7 @@ export default class BlockReferenceEnhancer extends Plugin {
 
 		this.addCommand({
 			id: 'review-missing-source-blocks',
-			name: 'Review missing source blocks',
+			name: t('command.reviewMissing'),
 			callback: () => {
 				this.openStaleBlockReview();
 			},
@@ -271,7 +273,7 @@ export default class BlockReferenceEnhancer extends Plugin {
 
 		this.addCommand({
 			id: 'sync-logseq-obsidian-page-properties-current-file',
-			name: 'Sync Logseq and Obsidian page properties in current file',
+			name: t('command.syncCurrentFile'),
 			callback: () => {
 				void this.syncDualPagePropertiesCurrentFile();
 			},
@@ -279,7 +281,7 @@ export default class BlockReferenceEnhancer extends Plugin {
 
 		this.addCommand({
 			id: 'sync-logseq-obsidian-page-properties-selected-folders',
-			name: 'Scan and sync Logseq and Obsidian page properties in selected folders',
+			name: t('command.syncSelectedFolders'),
 			callback: () => {
 				void this.scanAndSyncDualPagePropertyFolders();
 			},
@@ -587,7 +589,7 @@ export default class BlockReferenceEnhancer extends Plugin {
 
 		menu.addItem((item) => {
 			item
-				.setTitle('Copy block reference')
+				.setTitle(t('menu.copyReference'))
 				.setIcon('copy')
 				.setSection('block-reference-enhancer')
 				.onClick(() => {
@@ -597,7 +599,7 @@ export default class BlockReferenceEnhancer extends Plugin {
 
 		menu.addItem((item) => {
 			item
-				.setTitle('Copy block embed')
+				.setTitle(t('menu.copyEmbed'))
 				.setIcon('copy')
 				.setSection('block-reference-enhancer')
 				.onClick(() => {
@@ -620,7 +622,7 @@ export default class BlockReferenceEnhancer extends Plugin {
 
 		menu.addItem((item) => {
 			item
-				.setTitle('Copy selection (UUID blocks as text)')
+				.setTitle(t('menu.copySelectionAsText'))
 				.setIcon('copy')
 				.setSection('block-reference-enhancer')
 				.onClick(() => {
@@ -631,7 +633,7 @@ export default class BlockReferenceEnhancer extends Plugin {
 
 	private async copySelectionUuidBlocksAsText(selectedMarkdown: string) {
 		if (!navigator.clipboard?.writeText) {
-			new Notice('Clipboard API unavailable on this platform.');
+			new Notice(t('notice.clipboardUnavailable'));
 			return;
 		}
 
@@ -641,15 +643,15 @@ export default class BlockReferenceEnhancer extends Plugin {
 				resolveInlineSummary: (uuid) => this.getInlineReferenceInfo(uuid).text,
 			});
 			await navigator.clipboard.writeText(result.text);
-			new Notice('Copied selection with UUID blocks converted to text.');
+			new Notice(t('notice.selectionCopied'));
 		} catch (error) {
 			if (error instanceof UuidSelectionCopyError && error.code === 'output-too-large') {
-				new Notice('Converted selection is too large to copy safely.');
+				new Notice(t('notice.selectionTooLarge'));
 				return;
 			}
 
 			console.error('Failed to copy selection with UUID blocks converted to text:', error);
-			new Notice('Failed to copy selection with UUID blocks converted to text.');
+			new Notice(t('notice.selectionCopyFailed'));
 		}
 	}
 
@@ -660,7 +662,7 @@ export default class BlockReferenceEnhancer extends Plugin {
 
 		menu.addItem((item) => {
 			item
-				.setTitle('Copy current level and children')
+				.setTitle(t('menu.copyLevelAndChildren'))
 				.setIcon('copy')
 				.setSection('block-reference-enhancer')
 				.onClick(() => {
@@ -676,7 +678,7 @@ export default class BlockReferenceEnhancer extends Plugin {
 
 		menu.addItem((item) => {
 			item
-				.setTitle('Paste clipboard as outline')
+				.setTitle(t('menu.pasteAsOutline'))
 				.setIcon('list-tree')
 				.setSection('block-reference-enhancer')
 				.onClick(() => {
@@ -710,7 +712,7 @@ export default class BlockReferenceEnhancer extends Plugin {
 		}
 
 		if (!navigator.clipboard?.writeText) {
-			new Notice('Clipboard API unavailable on this platform.');
+			new Notice(t('notice.clipboardUnavailable'));
 			return;
 		}
 
@@ -718,7 +720,7 @@ export default class BlockReferenceEnhancer extends Plugin {
 			? `{{embed ((${blockId}))}}`
 			: `((${blockId}))`;
 		await navigator.clipboard.writeText(text);
-		new Notice(syntax === 'embed' ? 'Block embed copied to clipboard!' : 'Block reference copied to clipboard!');
+		new Notice(syntax === 'embed' ? t('notice.embedCopied') : t('notice.referenceCopied'));
 	}
 
 	private isCurrentLineSourceBlock(editor: Editor, targetLine = editor.getCursor().line): boolean {
@@ -774,7 +776,7 @@ export default class BlockReferenceEnhancer extends Plugin {
 
 		const blockMatch = lineContent.match(BlockReferenceEnhancer.SOURCE_BLOCK_PATTERN);
 		if (!blockMatch) {
-			new Notice('This line is not a valid source block.');
+			new Notice(t('notice.invalidSourceLine'));
 			return null;
 		}
 
@@ -846,7 +848,7 @@ export default class BlockReferenceEnhancer extends Plugin {
 	private async openSourceBlockFromBackButton(blockId: string, event: MouseEvent) {
 		const sourceBlocks = this.indexService.getActiveSourceBlocks(blockId);
 		if (sourceBlocks.length === 0) {
-			new Notice('Source block is missing.');
+			new Notice(t('notice.sourceMissing'));
 			return;
 		}
 
@@ -883,20 +885,20 @@ export default class BlockReferenceEnhancer extends Plugin {
 	private deleteRenderedReferenceFromButton(button: HTMLElement) {
 		const host = button.closest('[data-block-ref-from][data-block-ref-to]');
 		if (!isHtmlElement(host)) {
-			new Notice('Unable to delete this rendered block syntax here.');
+			new Notice(t('notice.deleteUnavailable'));
 			return;
 		}
 
 		const from = Number(host.dataset.blockRefFrom);
 		const to = Number(host.dataset.blockRefTo);
 		if (!Number.isFinite(from) || !Number.isFinite(to) || to < from) {
-			new Notice('Unable to resolve the rendered block syntax range.');
+			new Notice(t('notice.deleteRangeUnavailable'));
 			return;
 		}
 
 		const editorView = this.resolveRenderedReferenceEditorView(host);
 		if (!editorView) {
-			new Notice('Delete is only available in Live Preview editing.');
+			new Notice(t('notice.deleteLivePreviewOnly'));
 			return;
 		}
 
@@ -919,7 +921,7 @@ export default class BlockReferenceEnhancer extends Plugin {
 
 	private getInlineReferenceInfoInternal(uuid: string, visited: Set<string>): { text: string | null; stale: boolean } {
 		if (visited.has(uuid)) {
-			return { text: '[cyclic block]', stale: false };
+			return { text: t('render.cyclicBlockBracketed'), stale: false };
 		}
 
 		const block = this.indexService.getBlock(uuid);
@@ -932,7 +934,7 @@ export default class BlockReferenceEnhancer extends Plugin {
 
 		const firstLine = block.rawContent.split(/\r?\n/, 1)[0] ?? '';
 		const expandedLine = firstLine.replace(/(?:\(\(|\uFF08\uFF08)([A-Za-z0-9_-]{36,})(?:\)\)|\uFF09\uFF09)/g, (_match, nestedUuid: string) => {
-			return this.getInlineReferenceInfoInternal(nestedUuid, nextVisited).text ?? '[missing block]';
+			return this.getInlineReferenceInfoInternal(nestedUuid, nextVisited).text ?? t('render.missingBlockBracketed');
 		});
 
 		const summary = createInlineReferenceSummary(expandedLine);
@@ -1290,7 +1292,7 @@ export default class BlockReferenceEnhancer extends Plugin {
 		inlineRef.dataset.blockRefSourceId = uuid;
 		if (stale) {
 			inlineRef.addClass('is-stale');
-			inlineRef.setAttribute('title', 'Source block missing. Showing cached content.');
+			inlineRef.setAttribute('title', t('render.staleBlock'));
 		}
 		inlineRef.setAttribute(MANAGED_NODE_ATTR, 'true');
 
@@ -1426,7 +1428,7 @@ export default class BlockReferenceEnhancer extends Plugin {
 			container.empty();
 			container.removeClass('is-loading');
 			container.addClass('block-reference-enhancer-error');
-			container.setText('Cyclic embed');
+			container.setText(t('render.cyclicEmbed'));
 			if (includeBackButton) {
 				this.attachSourceBackButton(container, uuid);
 			}
@@ -1438,7 +1440,7 @@ export default class BlockReferenceEnhancer extends Plugin {
 			container.empty();
 			container.removeClass('is-loading');
 			container.addClass('block-reference-enhancer-error');
-			container.setText('Missing block');
+			container.setText(t('render.missingBlock'));
 			if (includeBackButton) {
 				this.attachSourceBackButton(container, uuid);
 			}
@@ -1453,7 +1455,7 @@ export default class BlockReferenceEnhancer extends Plugin {
 			container.addClass('is-stale');
 			const warning = container.ownerDocument.createElement('div');
 			warning.addClass('block-reference-enhancer-warning');
-			warning.setText('Source block missing. Showing cached content.');
+			warning.setText(t('render.staleBlock'));
 			contentNodes.push(warning);
 		}
 
@@ -1554,7 +1556,7 @@ export default class BlockReferenceEnhancer extends Plugin {
 					fragment.appendChild(node.ownerDocument.createTextNode(placeholder));
 				} else {
 					const inlineInfo = this.getInlineReferenceInfo(inlineUuid);
-					const summary = inlineInfo.text ?? '[missing block]';
+					const summary = inlineInfo.text ?? t('render.missingBlockBracketed');
 					fragment.appendChild(this.createInlineReferenceElement(node.ownerDocument, inlineUuid, summary, inlineInfo.stale));
 					replacedInline = true;
 				}
@@ -1668,7 +1670,7 @@ export default class BlockReferenceEnhancer extends Plugin {
 
 	getBlockSummary(block: BlockCache): string {
 		const firstLine = block.rawContent.split(/\r?\n/, 1)[0]?.trim();
-		return firstLine && firstLine.length > 0 ? firstLine : '[empty block]';
+		return firstLine && firstLine.length > 0 ? firstLine : t('render.emptyBlockBracketed');
 	}
 
 	resolveReferencePreviewText(text: string): string {
@@ -1686,7 +1688,7 @@ export default class BlockReferenceEnhancer extends Plugin {
 	): Promise<ReferencePreviewContext[]> {
 		const contexts: ReferencePreviewContext[] = Array.from(
 			{ length: references.length },
-			() => ({ current: '[empty line]' }),
+			() => ({ current: t('render.emptyLineBracketed') }),
 		);
 		const referencesByFilePath = new Map<string, Array<{ index: number; reference: BlockReferenceLocation }>>();
 
@@ -1704,7 +1706,7 @@ export default class BlockReferenceEnhancer extends Plugin {
 			const file = this.app.vault.getAbstractFileByPath(filePath);
 			if (!(file instanceof TFile)) {
 				for (const entry of entries) {
-					contexts[entry.index] = { current: '[file not found]' };
+					contexts[entry.index] = { current: t('render.fileNotFoundBracketed') };
 				}
 				continue;
 			}
@@ -1720,7 +1722,7 @@ export default class BlockReferenceEnhancer extends Plugin {
 
 	async getReferencePreview(reference: BlockReferenceLocation, maxLength = 140): Promise<string> {
 		const [context] = await this.getReferencePreviewContexts([reference], maxLength);
-		return context?.current ?? '[empty line]';
+		return context?.current ?? t('render.emptyLineBracketed');
 	}
 
 	private buildReferencePreviewContext(
@@ -1832,7 +1834,7 @@ export default class BlockReferenceEnhancer extends Plugin {
 	private truncateReferencePreviewText(text: string, maxLength: number): string {
 		const trimmedText = text.trim();
 		if (!trimmedText) {
-			return '[empty line]';
+			return t('render.emptyLineBracketed');
 		}
 
 		return trimmedText.length > maxLength ? `${trimmedText.slice(0, maxLength).trimEnd()}…` : trimmedText;
@@ -1845,7 +1847,7 @@ export default class BlockReferenceEnhancer extends Plugin {
 	async openReferenceLocation(reference: BlockReferenceLocation) {
 		const file = this.app.vault.getAbstractFileByPath(reference.filePath);
 		if (!(file instanceof TFile)) {
-			new Notice('Unable to open the referenced file.');
+			new Notice(t('notice.openReferencedFileFailed'));
 			return;
 		}
 
@@ -1864,16 +1866,16 @@ export default class BlockReferenceEnhancer extends Plugin {
 	async recoverBlockToRecoveryPage(id: string) {
 		const recoveryFile = await this.indexService.recoverBlockToRecoveryPage(id);
 		if (!recoveryFile) {
-			new Notice('Unable to recover source block to the recovery page.');
+			new Notice(t('notice.recoverFailed'));
 			return;
 		}
 
-		new Notice(`Recovered source block to ${recoveryFile.path}.`);
+		new Notice(t('notice.recovered', { path: recoveryFile.path }));
 	}
 
 	async confirmBlockDeletion(id: string) {
 		await this.indexService.confirmBlockDeletion(id);
-		new Notice('Confirmed missing source block deletion.');
+		new Notice(t('notice.deletionConfirmed'));
 	}
 
 	openStaleBlockReview() {
@@ -1881,7 +1883,7 @@ export default class BlockReferenceEnhancer extends Plugin {
 	}
 
 	private async rebuildBlockReferenceIndex() {
-		new Notice('Building block index...');
+		new Notice(t('index.buildingNotice'));
 
 		try {
 			const stats = await this.indexService.rebuildIndex({
@@ -1891,29 +1893,37 @@ export default class BlockReferenceEnhancer extends Plugin {
 				},
 			});
 			this.setIndexReadyStatus(stats);
-			new Notice(`Block index rebuilt: ${stats.fileCount} files, ${stats.blockCount} blocks, ${stats.referenceCount} references.`);
+			new Notice(t('index.rebuiltNotice', {
+				files: stats.fileCount,
+				blocks: stats.blockCount,
+				references: stats.referenceCount,
+			}));
 		} catch (error) {
-			this.setIndexStatusMessage('Block index: rebuild failed');
+			this.setIndexStatusMessage(t('index.status.rebuildFailed'));
 			console.error('Failed to rebuild block index:', error);
-			new Notice('Failed to rebuild block index.');
+			new Notice(t('index.rebuildFailedNotice'));
 		}
 	}
 
 	private updateIndexProgress(progress: IndexProgress) {
 		const phaseLabel = progress.phase === 'rebuild'
-			? 'building'
+			? t('index.status.building')
 			: progress.phase === 'reconcile'
-				? 'reconciling'
-				: 'loading cache';
+				? t('index.status.reconciling')
+				: t('index.status.loadingCachePhase');
 
 		if (progress.totalFiles <= 0) {
-			this.setIndexStatusMessage(`Block index: ${phaseLabel}...`);
+			this.setIndexStatusMessage(t('index.status.phase', { phase: phaseLabel }));
 			return;
 		}
 
-		this.setIndexStatusMessage(
-			`Block index: ${phaseLabel} ${progress.processedFiles}/${progress.totalFiles} files | ${progress.blockCount} blocks | ${progress.referenceCount} refs`
-		);
+		this.setIndexStatusMessage(t('index.status.progress', {
+			phase: phaseLabel,
+			processed: progress.processedFiles,
+			total: progress.totalFiles,
+			blocks: progress.blockCount,
+			references: progress.referenceCount,
+		}));
 	}
 
 	private handleIndexStatus(status: IndexStatus) {
@@ -1923,37 +1933,45 @@ export default class BlockReferenceEnhancer extends Plugin {
 
 		switch (status.state) {
 			case 'loading-cache':
-				this.setIndexStatusMessage('Block index: loading cache...');
+				this.setIndexStatusMessage(t('index.status.loadingCache'));
 				return;
 			case 'cache-missing':
 				this.startupFullRebuildPending = true;
-				this.setIndexStatusMessage('Block index: no cache found, building full index...');
-				new Notice('No cached block index found. Building a new index...');
+				this.setIndexStatusMessage(t('index.status.noCache'));
+				new Notice(t('index.cacheMissingNotice'));
 				return;
 			case 'cache-invalidated':
 				this.startupFullRebuildPending = true;
-				this.setIndexStatusMessage('Block index: cache outdated, rebuilding full index...');
-				new Notice('Cached block index is outdated. Rebuilding a new index...');
+				this.setIndexStatusMessage(t('index.status.cacheOutdated'));
+				new Notice(t('index.cacheOutdatedNotice'));
 				return;
 			case 'cache-loaded':
 				this.setIndexStatusMessage(
-					this.buildStatusText('Block index: cache loaded, checking vault changes...', status.stats)
+					this.buildStatusText(t('index.status.cacheLoaded'), status.stats)
 				);
 				return;
 			case 'reconcile-start':
 				if ((status.totalWork ?? 0) > 0) {
 					this.setIndexStatusMessage(
-						`Block index: reconciling 0/${status.totalWork} files | ${status.changedFiles ?? 0} changed | ${status.removedFiles ?? 0} removed`
+						t('index.status.reconcileProgress', {
+							total: status.totalWork ?? 0,
+							changed: status.changedFiles ?? 0,
+							removed: status.removedFiles ?? 0,
+						})
 					);
 					return;
 				}
 
-				this.setIndexStatusMessage('Block index: checking vault changes...');
+				this.setIndexStatusMessage(t('index.status.checkingChanges'));
 				return;
 			case 'ready':
 				this.setIndexReadyStatus(status.stats ?? this.lastKnownIndexStats);
 				if (this.startupFullRebuildPending && status.source === 'rebuild' && status.stats) {
-					new Notice(`Initial block index build complete: ${status.stats.fileCount} files, ${status.stats.blockCount} blocks, ${status.stats.referenceCount} references.`);
+					new Notice(t('index.initialBuildDoneNotice', {
+						files: status.stats.fileCount,
+						blocks: status.stats.blockCount,
+						references: status.stats.referenceCount,
+					}));
 				}
 				this.startupFullRebuildPending = false;
 				return;
@@ -1962,7 +1980,7 @@ export default class BlockReferenceEnhancer extends Plugin {
 
 	private setIndexReadyStatus(stats?: IndexBuildStats | null) {
 		this.lastKnownIndexStats = stats ?? this.lastKnownIndexStats;
-		this.setIndexStatusMessage(this.buildStatusText('Block index: ready', this.lastKnownIndexStats));
+		this.setIndexStatusMessage(this.buildStatusText(t('index.status.ready'), this.lastKnownIndexStats));
 	}
 
 	private buildStatusText(prefix: string, stats?: IndexBuildStats | null): string {
@@ -1970,7 +1988,12 @@ export default class BlockReferenceEnhancer extends Plugin {
 			return prefix;
 		}
 
-		return `${prefix} | ${stats.fileCount} files | ${stats.blockCount} blocks | ${stats.referenceCount} refs`;
+		return t('index.status.stats', {
+			prefix,
+			files: stats.fileCount,
+			blocks: stats.blockCount,
+			references: stats.referenceCount,
+		});
 	}
 
 	private setIndexStatusMessage(message: string) {
@@ -2181,7 +2204,7 @@ export default class BlockReferenceEnhancer extends Plugin {
 			reusableBadge.dataset.blockRefSourceCount = String(count);
 			reusableBadge.dataset.blockRefSourceFilePath = block.filePath;
 			reusableBadge.dataset.blockRefSourceStartLine = String(block.startLine);
-			reusableBadge.setAttribute('aria-label', `Referenced ${count} times`);
+			reusableBadge.setAttribute('aria-label', t('aria.referencedTimes', { count }));
 			reusableBadge.removeAttribute('title');
 			reusableBadge.setText(String(count));
 			return;

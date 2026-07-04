@@ -25,6 +25,7 @@ import {
 	resolveDualPropertyConflicts,
 	showDualPropertyBatchReport,
 } from '../ui/DualPropertySyncModals';
+import { t } from '../i18n';
 
 const REPAIR_DEBOUNCE_MS = 750;
 const REPAIR_WINDOW_MS = 10 * 60 * 1000;
@@ -81,7 +82,7 @@ export class DualPropertySyncService {
 
 	async syncCurrentFile(file: TFile | null): Promise<void> {
 		if (!file || file.extension !== 'md') {
-			new Notice('Open a Markdown file before syncing page properties.');
+			new Notice(t('sync.openMarkdown'));
 			return;
 		}
 		const context = this.getRuleContext();
@@ -97,7 +98,7 @@ export class DualPropertySyncService {
 			allowRepair: true,
 		});
 		if (plan.errors.length > 0) {
-			new Notice(`Page property sync skipped: ${plan.errors[0]}`);
+			new Notice(t('sync.skipped', { reason: plan.errors[0] }));
 			return;
 		}
 
@@ -109,19 +110,19 @@ export class DualPropertySyncService {
 			if (!choices) return;
 			const choice = choices[file.path] ?? 'skip';
 			if (choice === 'skip') {
-				new Notice('Page property sync skipped because the conflict was not resolved.');
+				new Notice(t('sync.conflictSkipped'));
 				return;
 			}
 			plan = resolveDualPropertySyncPlan(plan, context.rules, choice);
 		}
 
 		const result = await this.applySyncPlan(file, plan, context.rules, context.fingerprint);
-		new Notice(result === 'changed' ? 'Page properties synced.' : result === 'unchanged' ? 'Page properties are already in sync.' : 'The file changed before it could be synced.');
+		new Notice(result === 'changed' ? t('sync.done') : result === 'unchanged' ? t('sync.alreadyDone') : t('sync.fileChanged'));
 	}
 
 	async scanAndSyncSelectedFolders(): Promise<void> {
 		if (this.batchRunning) {
-			new Notice('Another page property batch operation is already running.');
+			new Notice(t('sync.batchBusy'));
 			return;
 		}
 		const context = this.getRuleContext();
@@ -132,13 +133,13 @@ export class DualPropertySyncService {
 			return;
 		}
 		if (folders.paths.length === 0) {
-			new Notice('Add at least one vault-relative folder before running a batch sync.');
+			new Notice(t('sync.addFolder'));
 			return;
 		}
 
 		this.batchRunning = true;
 		let cancelled = false;
-		const status = new CancelableBatchNotice('Scanning selected folders for page properties...', () => {
+		const status = new CancelableBatchNotice(t('sync.scanning'), () => {
 			cancelled = true;
 		});
 		try {
@@ -147,11 +148,11 @@ export class DualPropertySyncService {
 			const report = createReport('sync');
 			for (let index = 0; index < files.length; index += 1) {
 				if (cancelled) {
-					new Notice('Page property batch sync cancelled.');
+					new Notice(t('sync.batchCancelled'));
 					return;
 				}
 				if (index % BATCH_YIELD_EVERY === 0) {
-					status.setMessage(`Scanning page properties: ${index}/${files.length}...`);
+					status.setMessage(t('sync.scanningProgress', { current: index, total: files.length }));
 					await yieldToMainThread();
 				}
 				const file = files[index];
@@ -181,7 +182,7 @@ export class DualPropertySyncService {
 			}, 'sync');
 			if (!confirmed) return;
 			if (cancelled) {
-				new Notice('Page property batch sync cancelled.');
+				new Notice(t('sync.batchCancelled'));
 				return;
 			}
 
@@ -195,17 +196,17 @@ export class DualPropertySyncService {
 				choices = resolved;
 			}
 			if (cancelled) {
-				new Notice('Page property batch sync cancelled.');
+				new Notice(t('sync.batchCancelled'));
 				return;
 			}
 
 			for (let index = 0; index < plans.length; index += 1) {
 				if (cancelled) {
-					new Notice('Page property batch sync cancelled. Remaining files were not changed.');
+					new Notice(t('sync.batchCancelledRemaining'));
 					break;
 				}
 				if (index % BATCH_YIELD_EVERY === 0) {
-					status.setMessage(`Applying page property sync: ${index}/${plans.length}...`);
+					status.setMessage(t('sync.applyingProgress', { current: index, total: plans.length }));
 					await yieldToMainThread();
 				}
 				let { plan } = plans[index];
@@ -225,7 +226,7 @@ export class DualPropertySyncService {
 				} else if (result === 'unchanged') {
 					report.unchanged.push(file.path);
 				} else {
-					report.skipped.push({ filePath: file.path, reason: 'The file changed after the scan.' });
+					report.skipped.push({ filePath: file.path, reason: t('sync.fileChangedAfterScan') });
 				}
 			}
 			await this.persistStateNow();
@@ -238,20 +239,20 @@ export class DualPropertySyncService {
 
 	async returnSelectedFoldersToLogseqOnly(): Promise<void> {
 		if (this.batchRunning) {
-			new Notice('Another page property batch operation is already running.');
+			new Notice(t('sync.batchBusy'));
 			return;
 		}
 		const context = this.getRuleContext();
 		if (!context) return;
 		const folders = parseFolderScope(this.callbacks.getSettings().dualPagePropertyFolders);
 		if (folders.errors.length > 0 || folders.paths.length === 0) {
-			new Notice(folders.errors[0] ?? 'Add at least one vault-relative folder before returning to Logseq-only properties.');
+			new Notice(folders.errors[0] ?? t('sync.cleanupAddFolder'));
 			return;
 		}
 
 		this.batchRunning = true;
 		let cancelled = false;
-		const status = new CancelableBatchNotice('Checking whether YAML can be removed safely...', () => {
+		const status = new CancelableBatchNotice(t('sync.checkingCleanup'), () => {
 			cancelled = true;
 		});
 		try {
@@ -260,7 +261,7 @@ export class DualPropertySyncService {
 			const report = createReport('cleanup');
 			for (let index = 0; index < files.length; index += 1) {
 				if (cancelled) {
-					new Notice('Logseq-only cleanup cancelled.');
+					new Notice(t('sync.cleanupCancelled'));
 					return;
 				}
 				if (index % BATCH_YIELD_EVERY === 0) await yieldToMainThread();
@@ -268,7 +269,7 @@ export class DualPropertySyncService {
 				const originalContent = await this.app.vault.read(file);
 				const repair = repairBulletizedYaml(originalContent, context.rules);
 				if (repair.status === 'unsafe') {
-					report.skipped.push({ filePath: file.path, reason: repair.reason ?? 'Damaged YAML cannot be repaired safely.' });
+					report.skipped.push({ filePath: file.path, reason: repair.reason ?? t('sync.damagedYamlUnsafe') });
 					continue;
 				}
 				const workingContent = repair.content;
@@ -305,19 +306,19 @@ export class DualPropertySyncService {
 			}, 'cleanup');
 			if (!confirmed) return;
 			if (cancelled) {
-				new Notice('Logseq-only cleanup cancelled.');
+				new Notice(t('sync.cleanupCancelled'));
 				return;
 			}
 
 			const recoveryEntries: DualPropertyCleanupRecoveryEntry[] = [];
 			for (const candidate of candidates) {
 				if (cancelled) {
-					new Notice('Logseq-only cleanup cancelled. Remaining files were not changed.');
+					new Notice(t('sync.cleanupCancelledRemaining'));
 					break;
 				}
 				const applied = await this.applyExactContent(candidate.file, candidate.originalContent, candidate.finalContent);
 				if (!applied) {
-					report.skipped.push({ filePath: candidate.file.path, reason: 'The file changed after the scan.' });
+					report.skipped.push({ filePath: candidate.file.path, reason: t('sync.fileChangedAfterScan') });
 					continue;
 				}
 				report.changed.push(candidate.file.path);
@@ -417,7 +418,7 @@ export class DualPropertySyncService {
 			guard.suspendedAt = now;
 			this.state.repairGuards[file.path] = guard;
 			this.scheduleStateSave();
-			new Notice(`Automatic YAML repair was suspended for ${file.path} because another app keeps rewriting it.`);
+			new Notice(t('sync.repairSuspended', { path: file.path }));
 			return;
 		}
 
@@ -426,7 +427,7 @@ export class DualPropertySyncService {
 			guard.repairTimestamps.push(now);
 			this.state.repairGuards[file.path] = guard;
 			this.scheduleStateSave();
-			new Notice(`Repaired Logseq-damaged YAML in ${file.path}.`);
+			new Notice(t('sync.repaired', { path: file.path }));
 		}
 	}
 
@@ -476,12 +477,12 @@ export class DualPropertySyncService {
 	private getRuleContext(showNotice = true) {
 		const settings = this.callbacks.getSettings();
 		if (!settings.enableDualPagePropertySync) {
-			if (showNotice) new Notice('Enable Logseq and Obsidian page property sync in plugin settings first.');
+			if (showNotice) new Notice(t('sync.enableFirst'));
 			return null;
 		}
 		const parsed = parseDualPropertyRules(settings.dualPagePropertyWhitelist);
 		if (parsed.errors.length > 0 || parsed.rules.length === 0) {
-			if (showNotice) new Notice(parsed.errors[0] ?? 'Add at least one property sync whitelist rule.');
+			if (showNotice) new Notice(parsed.errors[0] ?? t('sync.addWhitelistRule'));
 			return null;
 		}
 		return parsed;
@@ -523,7 +524,7 @@ export function parseFolderScope(text: string): { paths: string[]; errors: strin
 		if (!raw) continue;
 		const normalizedSeparators = raw.replace(/\\/gu, '/');
 		if (/^[A-Za-z]:\//u.test(normalizedSeparators) || normalizedSeparators.startsWith('/') || normalizedSeparators.split('/').includes('..')) {
-			errors.push(`Folder line ${index + 1} must be a safe vault-relative path.`);
+			errors.push(t('validation.folder.invalid', { line: index + 1 }));
 			continue;
 		}
 		const normalized = raw === '.' ? '.' : normalizedSeparators.replace(/^\/+|\/+$/gu, '');
@@ -541,12 +542,12 @@ function resolveCleanupUnsafeReason(
 	ruleIds: string[],
 ): string | null {
 	if (analysis.errors.length > 0) return analysis.errors[0];
-	if (analysis.hasUnmanagedYaml) return 'YAML contains keys that are not represented by the whitelist.';
+	if (analysis.hasUnmanagedYaml) return t('validation.cleanup.unmanagedYaml');
 	for (const ruleId of ruleIds) {
 		const yamlValue = analysis.yaml.values[ruleId] ?? null;
 		const logseqValue = analysis.logseq.values[ruleId] ?? null;
 		if (yamlValue !== null && (logseqValue === null || !valuesEqual(yamlValue, logseqValue))) {
-			return `YAML property ${ruleId} is not represented equivalently in Logseq properties.`;
+			return t('validation.cleanup.notEquivalent', { key: ruleId });
 		}
 	}
 	return null;
@@ -569,11 +570,11 @@ class CancelableBatchNotice {
 		this.messageEl = activeDocument.createElement('span');
 		this.messageEl.textContent = message;
 		const cancelButton = activeDocument.createElement('button');
-		cancelButton.textContent = 'Cancel';
+		cancelButton.textContent = t('sync.cancelButton');
 		cancelButton.addClass('block-reference-dual-property-cancel');
 		cancelButton.addEventListener('click', () => {
 			cancelButton.disabled = true;
-			this.messageEl.textContent = 'Cancelling after the current file...';
+			this.messageEl.textContent = t('sync.cancelling');
 			onCancel();
 		});
 		fragment.append(this.messageEl, cancelButton);

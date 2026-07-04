@@ -1,5 +1,6 @@
 import { App, Modal, Setting } from 'obsidian';
 import type { OutlinePastePreflight } from '../services/OutlinePasteParser';
+import { t } from '../i18n';
 
 export function confirmLargeOutlinePaste(
 	app: App,
@@ -33,14 +34,20 @@ class LargeOutlinePasteConfirmModal extends Modal {
 	}
 
 	onOpen() {
-		this.setTitle('Large outline paste');
+		this.setTitle(t('outline.large.title'));
 		this.contentEl.createEl('p', {
-			text: 'This clipboard content is large. Processing will run in time slices and may take a while.',
+			text: t('outline.large.desc'),
 		});
 
 		const details = this.preflight.preferredSource === 'html'
-			? `${formatBytes(this.preflight.htmlBytes)} HTML, ${this.preflight.htmlStructure.totalSupportedTagCount} supported tags`
-			: `${formatBytes(this.preflight.textBytes)} text, ${this.preflight.textLines} lines`;
+			? t('outline.large.htmlDetails', {
+				bytes: formatBytes(this.preflight.htmlBytes),
+				tags: this.preflight.htmlStructure.totalSupportedTagCount,
+			})
+			: t('outline.large.textDetails', {
+				bytes: formatBytes(this.preflight.textBytes),
+				lines: this.preflight.textLines,
+			});
 		this.contentEl.createEl('p', { text: details });
 		if (this.preflight.message) {
 			this.contentEl.createEl('p', { text: this.preflight.message });
@@ -49,12 +56,12 @@ class LargeOutlinePasteConfirmModal extends Modal {
 		new Setting(this.contentEl)
 			.addButton((button) => {
 				button
-					.setButtonText('Cancel')
+					.setButtonText(t('action.cancel'))
 					.onClick(() => this.settle(false));
 			})
 			.addButton((button) => {
 				button
-					.setButtonText('Process')
+					.setButtonText(t('action.process'))
 					.setCta()
 					.onClick(() => this.settle(true));
 			});

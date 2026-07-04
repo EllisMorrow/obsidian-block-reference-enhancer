@@ -22,6 +22,7 @@ import {
 } from './OutlinePasteTarget';
 import { resolveOutlinePasteInsertionContext } from '../editor/UnorderedListStructure';
 import { confirmLargeOutlinePaste } from '../ui/LargeOutlinePasteConfirmModal';
+import { t } from '../i18n';
 
 const STATUS_NOTICE_DURATION_MS = 0;
 const RESULT_NOTICE_DURATION_MS = 5000;
@@ -53,19 +54,19 @@ export class OutlinePasteController {
 		targetLine: number,
 	): Promise<void> {
 		if (this.activeJob) {
-			new Notice('Another outline paste is already running.', RESULT_NOTICE_DURATION_MS);
+			new Notice(t('outline.busy'), RESULT_NOTICE_DURATION_MS);
 			return;
 		}
 
 		const file = info.file;
 		const anchor = createOutlinePasteTextAnchor(editor.getValue(), targetLine);
 		if (!(file instanceof TFile) || !anchor) {
-			new Notice('Paste as outline is only available on unordered-list blocks.', RESULT_NOTICE_DURATION_MS);
+			new Notice(t('outline.unavailable'), RESULT_NOTICE_DURATION_MS);
 			return;
 		}
 
 		const abortController = new AbortController();
-		const statusNotice = new Notice('Reading clipboard...', STATUS_NOTICE_DURATION_MS);
+		const statusNotice = new Notice(t('outline.reading'), STATUS_NOTICE_DURATION_MS);
 		this.activeJob = { abortController, statusNotice };
 
 		try {
@@ -73,18 +74,18 @@ export class OutlinePasteController {
 			this.throwIfCancelled(abortController.signal);
 			const preflight = inspectOutlinePasteInput(payload);
 			if (!preflight.processable) {
-				throw new OutlinePasteError('too-large', preflight.message ?? 'Clipboard content exceeds the safe outline-paste limit.');
+				throw new OutlinePasteError('too-large', preflight.message ?? t('outline.limitExceeded'));
 			}
 
 			if (preflight.requiresConfirmation) {
-				statusNotice.setMessage('Large clipboard content is waiting for confirmation...');
+				statusNotice.setMessage(t('outline.waitingConfirmation'));
 				const shouldProcess = await confirmLargeOutlinePaste(this.app, preflight, abortController.signal);
 				if (!shouldProcess) {
 					return;
 				}
 			}
 
-			statusNotice.setMessage('Converting clipboard to outline...');
+			statusNotice.setMessage(t('outline.converting'));
 			let lastProgressUpdate = 0;
 			let lastProgressPercent = -1;
 			const parseResult = await parseOutlinePasteInput(payload, createOutlinePasteParserOptions(preflight, {
@@ -99,12 +100,12 @@ export class OutlinePasteController {
 
 					lastProgressPercent = percent;
 					lastProgressUpdate = now;
-					statusNotice.setMessage(`Converting clipboard to outline: ${percent}%...`);
+					statusNotice.setMessage(t('outline.convertingProgress', { percent }));
 				},
 			}));
 			this.throwIfCancelled(abortController.signal);
 
-			statusNotice.setMessage('Resolving original paste location...');
+			statusNotice.setMessage(t('outline.resolvingLocation'));
 			const insertResult = await this.insertIntoOriginalFile(
 				file,
 				anchor,
@@ -115,8 +116,8 @@ export class OutlinePasteController {
 
 			new Notice(
 				parseResult.simplified
-					? `Outline pasted with simplified structure: ${parseResult.nodeCount} blocks in ${file.path}.`
-					: `Outline pasted: ${parseResult.nodeCount} blocks in ${file.path}.`,
+					? t('outline.pastedSimplified', { count: parseResult.nodeCount, path: file.path })
+					: t('outline.pasted', { count: parseResult.nodeCount, path: file.path }),
 				RESULT_NOTICE_DURATION_MS,
 			);
 
@@ -144,7 +145,7 @@ export class OutlinePasteController {
 	): Promise<{ editor: Editor | null; cursorOffset: number }> {
 		this.throwIfCancelled(signal);
 		if (this.app.vault.getAbstractFileByPath(file.path) !== file) {
-			throw new OutlinePasteError('target-changed', 'The original paste file is no longer available.');
+			throw new OutlinePasteError('target-changed', t('outline.targetFileMissing'));
 		}
 
 		const openView = this.findOpenMarkdownView(file);
@@ -152,7 +153,7 @@ export class OutlinePasteController {
 			const documentText = openView.editor.getValue();
 			const target = resolveOutlinePasteTextAnchor(documentText, anchor);
 			if (!target) {
-				throw new OutlinePasteError('target-changed', 'The original paste location changed and could not be resolved safely.');
+				throw new OutlinePasteError('target-changed', t('outline.targetChanged'));
 			}
 
 			const renderedMarkdown = renderOutlineNodes(nodes, target.rootInsertionPrefix);
@@ -173,7 +174,7 @@ export class OutlinePasteController {
 			this.throwIfCancelled(signal);
 			const target = resolveOutlinePasteTextAnchor(documentText, anchor);
 			if (!target) {
-				throw new OutlinePasteError('target-changed', 'The original paste location changed and could not be resolved safely.');
+				throw new OutlinePasteError('target-changed', t('outline.targetChanged'));
 			}
 
 			const renderedMarkdown = renderOutlineNodes(nodes, target.rootInsertionPrefix);
@@ -202,14 +203,14 @@ export class OutlinePasteController {
 
 	private throwIfCancelled(signal: AbortSignal) {
 		if (signal.aborted) {
-			throw new OutlinePasteError('cancelled', 'Outline paste was cancelled.');
+			throw new OutlinePasteError('cancelled', t('outline.cancelled'));
 		}
 	}
 }
 
 function validateRenderedMarkdownSize(renderedMarkdown: string, maxOutputMarkdownBytes: number) {
 	if (new TextEncoder().encode(renderedMarkdown).length > maxOutputMarkdownBytes) {
-		throw new OutlinePasteError('too-large', 'Converted outline Markdown is too large to insert.');
+		throw new OutlinePasteError('too-large', t('outline.outputTooLarge'));
 	}
 }
 
@@ -233,13 +234,13 @@ function resolveOutlinePasteFailureMessage(error: unknown): string {
 	if (error instanceof OutlinePasteError) {
 		switch (error.code) {
 			case 'empty':
-				return 'Clipboard is empty.';
+				return t('outline.empty');
 			case 'unsupported':
-				return 'Clipboard content is not supported for outline paste.';
+				return t('outline.unsupported');
 			case 'too-large':
 				return error.message;
 			case 'timeout':
-				return 'Outline paste timed out. Try a smaller selection.';
+				return t('outline.timeout');
 			case 'target-changed':
 				return error.message;
 			default:
@@ -247,5 +248,5 @@ function resolveOutlinePasteFailureMessage(error: unknown): string {
 		}
 	}
 
-	return 'Failed to paste clipboard as outline.';
+	return t('outline.failed');
 }

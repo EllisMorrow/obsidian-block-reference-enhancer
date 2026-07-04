@@ -1,5 +1,6 @@
 import { measureIndentColumns } from '../utils/markdownFence';
 import { isHtmlElement } from '../utils/dom';
+import { t } from '../i18n';
 
 const LIST_ITEM_REGEX = /^(\s*)(?:[-*+•◦▪](?:\s+(.*)|\s*)|\d+[.)]\s+(.*))$/;
 const HEADING_REGEX = /^(\s*)(#{1,6})\s+(.*)$/;
@@ -173,7 +174,7 @@ export function inspectOutlinePasteInput(payload: OutlineClipboardPayload): Outl
 			textBytes,
 			textLines,
 			htmlStructure,
-			message: 'Clipboard content exceeds the safe outline-paste limit.',
+			message: t('outline.limitExceeded'),
 		};
 	}
 
@@ -191,7 +192,7 @@ export function inspectOutlinePasteInput(payload: OutlineClipboardPayload): Outl
 		textLines,
 		htmlStructure,
 		message: preferredSource === 'text' && htmlHasStructure
-			? 'The HTML representation is too large, so processing will use clipboard text.'
+			? t('outline.htmlFallback')
 			: null,
 	};
 }
@@ -234,13 +235,13 @@ export async function parseOutlinePasteInput(
 	if (html && !options.skipHtml) {
 		if (getUtf8ByteLength(html) > runtime.htmlMaxBytes) {
 			if (!text) {
-				throw new OutlinePasteError('too-large', 'Clipboard HTML content is too large for outline paste.');
+				throw new OutlinePasteError('too-large', t('outline.htmlTooLarge'));
 			}
 		} else {
 			try {
 				const htmlStructureInfo = options.knownHtmlStructure ?? inspectHtmlStructure(html, runtime);
 				if (htmlStructureInfo.totalSupportedTagCount > runtime.maxHtmlTags) {
-					throw new OutlinePasteError('too-large', 'Clipboard HTML structure is too large for outline paste.');
+					throw new OutlinePasteError('too-large', t('outline.htmlStructureTooLarge'));
 				}
 				if (htmlStructureInfo.structuralTagCount > 0 && options.htmlToMarkdown) {
 					candidates.push(await parseHtmlCandidate(html, options.htmlToMarkdown, runtime));
@@ -249,7 +250,7 @@ export async function parseOutlinePasteInput(
 				if (error instanceof OutlinePasteError) {
 					lastError = error;
 				} else {
-					lastError = new OutlinePasteError('unsupported', 'Clipboard HTML content is not supported for outline paste.');
+					lastError = new OutlinePasteError('unsupported', t('outline.htmlUnsupported'));
 				}
 			}
 		}
@@ -258,7 +259,7 @@ export async function parseOutlinePasteInput(
 	if (text && (!options.preferSingleSource || candidates.length === 0)) {
 		if (getUtf8ByteLength(text) > runtime.textMaxBytes) {
 			if (candidates.length === 0) {
-				throw new OutlinePasteError('too-large', 'Clipboard text content is too large for outline paste.');
+				throw new OutlinePasteError('too-large', t('outline.textTooLarge'));
 			}
 		} else {
 			try {
@@ -267,7 +268,7 @@ export async function parseOutlinePasteInput(
 				if (error instanceof OutlinePasteError) {
 					lastError = error;
 				} else {
-					lastError = new OutlinePasteError('unsupported', 'Clipboard text content is not supported for outline paste.');
+					lastError = new OutlinePasteError('unsupported', t('outline.textUnsupported'));
 				}
 			}
 		}
@@ -279,10 +280,10 @@ export async function parseOutlinePasteInput(
 		}
 
 		if (html) {
-			throw new OutlinePasteError('unsupported', 'Clipboard content is not supported for outline paste.');
+			throw new OutlinePasteError('unsupported', t('outline.unsupported'));
 		}
 
-		throw new OutlinePasteError('empty', 'Clipboard is empty.');
+		throw new OutlinePasteError('empty', t('outline.empty'));
 	}
 
 	const bestCandidate = chooseBestCandidate(candidates);
@@ -331,7 +332,7 @@ async function parseHtmlCandidate(
 	if (typeof DOMParser === 'undefined') {
 		const markdownSource = normalizeClipboardText(htmlToMarkdown(html)) ?? '';
 		if (!markdownSource) {
-			throw new OutlinePasteError('unsupported', 'Clipboard HTML content is not supported for outline paste.');
+			throw new OutlinePasteError('unsupported', t('outline.htmlUnsupported'));
 		}
 
 		return parseCandidate(markdownSource, 'html', true, runtime);
@@ -346,7 +347,7 @@ async function parseHtmlCandidate(
 	if (nodes.length === 0) {
 		const markdownSource = normalizeClipboardText(htmlToMarkdown(html)) ?? '';
 		if (!markdownSource) {
-			throw new OutlinePasteError('empty', 'Clipboard is empty.');
+			throw new OutlinePasteError('empty', t('outline.empty'));
 		}
 
 		return parseCandidate(markdownSource, 'html', true, runtime);
@@ -354,11 +355,11 @@ async function parseHtmlCandidate(
 
 	const stats = summarizeOutlineNodes(nodes);
 	if (stats.nodeCount > runtime.maxOutputBlocks) {
-		throw new OutlinePasteError('too-large', 'Converted outline contains too many blocks.');
+		throw new OutlinePasteError('too-large', t('outline.tooManyBlocks'));
 	}
 
 	if (stats.maxDepth > runtime.maxDepth) {
-		throw new OutlinePasteError('too-large', 'Converted outline is too deeply nested.');
+		throw new OutlinePasteError('too-large', t('outline.tooDeep'));
 	}
 
 	return {
@@ -381,12 +382,12 @@ async function parseCandidate(
 	checkRuntimeLimits(runtime);
 	const normalizedText = sourceText.replace(/\r\n?/g, '\n').trim();
 	if (!normalizedText) {
-		throw new OutlinePasteError('empty', 'Clipboard is empty.');
+		throw new OutlinePasteError('empty', t('outline.empty'));
 	}
 
 	const lines = normalizedText.split('\n');
 	if (lines.length > runtime.maxInputLines) {
-		throw new OutlinePasteError('too-large', 'Clipboard content has too many lines for outline paste.');
+		throw new OutlinePasteError('too-large', t('outline.tooManyLines'));
 	}
 
 	const mode = hasStructuredMarkdownHints(normalizedText) ? 'structured' : 'flat';
@@ -397,15 +398,15 @@ async function parseCandidate(
 
 	const stats = summarizeOutlineNodes(nodes);
 	if (stats.nodeCount === 0) {
-		throw new OutlinePasteError('empty', 'Clipboard is empty.');
+		throw new OutlinePasteError('empty', t('outline.empty'));
 	}
 
 	if (stats.nodeCount > runtime.maxOutputBlocks) {
-		throw new OutlinePasteError('too-large', 'Converted outline contains too many blocks.');
+		throw new OutlinePasteError('too-large', t('outline.tooManyBlocks'));
 	}
 
 	if (stats.maxDepth > runtime.maxDepth) {
-		throw new OutlinePasteError('too-large', 'Converted outline is too deeply nested.');
+		throw new OutlinePasteError('too-large', t('outline.tooDeep'));
 	}
 
 	return {
@@ -819,7 +820,7 @@ function inspectHtmlStructure(html: string, runtime: RuntimeLimits): HtmlStructu
 	checkRuntimeLimits(runtime);
 	const result = inspectHtmlStructureBounded(html, runtime.maxHtmlTags + 1);
 	if (result.totalSupportedTagCount > runtime.maxHtmlTags) {
-		throw new OutlinePasteError('too-large', 'Clipboard HTML structure is too large for outline paste.');
+		throw new OutlinePasteError('too-large', t('outline.htmlStructureTooLarge'));
 	}
 
 	return result;
@@ -1034,11 +1035,11 @@ function getUtf8ByteLength(value: string): number {
 
 function checkRuntimeLimits(runtime: RuntimeLimits) {
 	if (runtime.isCancelled?.()) {
-		throw new OutlinePasteError('cancelled', 'Outline paste was cancelled.');
+		throw new OutlinePasteError('cancelled', t('outline.cancelled'));
 	}
 
 	if (runtime.now() - runtime.startedAt > runtime.timeoutMs) {
-		throw new OutlinePasteError('timeout', 'Outline paste conversion timed out.');
+		throw new OutlinePasteError('timeout', t('outline.conversionTimedOut'));
 	}
 }
 

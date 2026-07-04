@@ -1,4 +1,5 @@
 import { getDocument } from '../utils/dom';
+import { t } from '../i18n';
 
 export function createSourceReferenceBadgeElement(
     blockId: string,
@@ -18,7 +19,7 @@ export function createSourceReferenceBadgeElement(
     if (typeof sourceStartLine === 'number') {
         button.dataset.blockRefSourceStartLine = String(sourceStartLine);
     }
-    button.setAttribute('aria-label', `Referenced ${count} times`);
+    button.setAttribute('aria-label', t('aria.referencedTimes', { count }));
     button.setText(String(count));
     return button;
 }

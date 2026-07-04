@@ -4,6 +4,7 @@ import {
 	updateDualPropertyDocument,
 } from './document';
 import { valuesEqual } from './rules';
+import { t } from '../i18n';
 import type {
 	DualPropertyConflictChoice,
 	DualPropertyFileSnapshot,
@@ -35,7 +36,7 @@ export function buildDualPropertySyncPlan(options: {
 		? repairBulletizedYaml(options.content, options.rules)
 		: { status: 'not-needed' as const, content: options.content };
 	if (repair.status === 'unsafe') {
-		return createErrorPlan(options, repair.reason ?? 'The damaged YAML header cannot be repaired safely.');
+		return createErrorPlan(options, repair.reason ?? t('sync.damagedYamlUnsafe'));
 	}
 
 	const workingContent = repair.content;
@@ -136,7 +137,7 @@ export function materializeDualPropertySyncPlan(
 	rules: DualPropertySyncRule[],
 ): { content: string; errors: string[] } {
 	if (plan.conflictRuleIds.length > 0) {
-		return { content: plan.originalContent, errors: ['The file still has unresolved property conflicts.'] };
+		return { content: plan.originalContent, errors: [t('validation.sync.unresolvedConflicts')] };
 	}
 	return updateDualPropertyDocument(plan.workingContent, rules, plan.targetValues);
 }

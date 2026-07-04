@@ -2,6 +2,7 @@ import { setIcon } from 'obsidian';
 import type BlockReferenceEnhancer from '../main';
 import { BlockCache, BlockReferenceLocation, PaginatedBlockReferences, ReferencePreviewContext } from '../types';
 import { getWindow, isDomNode } from '../utils/dom';
+import { t } from '../i18n';
 
 const REFERENCE_PAGE_SIZE = 20;
 const MAX_REFERENCE_PREVIEW_LENGTH = 140;
@@ -150,7 +151,7 @@ export class SourceReferencePopover {
         const previewContexts = await this.plugin.getReferencePreviewContexts(pageData.references, MAX_REFERENCE_PREVIEW_LENGTH);
         const items = pageData.references.map((reference, index) => ({
             reference,
-            previewContext: previewContexts[index] ?? { current: '[empty line]' },
+            previewContext: previewContexts[index] ?? { current: t('popover.emptyLine') },
         }));
 
         if (token !== this.renderToken || !this.containerEl || this.currentBlockId !== blockId) {
@@ -239,7 +240,7 @@ export class SourceReferencePopover {
         this.containerEl.empty();
         this.containerEl.createDiv({
             cls: 'block-reference-source-popover-loading',
-            text: 'Loading references...',
+            text: t('popover.loading'),
         });
     }
 
@@ -251,7 +252,7 @@ export class SourceReferencePopover {
         this.containerEl.empty();
         this.containerEl.createDiv({
             cls: 'block-reference-source-popover-loading',
-            text: 'No active references.',
+            text: t('popover.empty'),
         });
     }
 
@@ -301,7 +302,11 @@ export class SourceReferencePopover {
                 attr: {
                     role: 'button',
                     tabindex: '0',
-                    'aria-label': `${this.getReferenceKindLabel(item.reference.kind)} ${fileName}, line ${item.reference.line + 1}`,
+					'aria-label': t('aria.referenceLocation', {
+						kind: this.getReferenceKindLabel(item.reference.kind),
+						file: fileName,
+						line: item.reference.line + 1,
+					}),
                 },
             });
             this.bindReferenceRowEvents(row, item.reference);
@@ -319,7 +324,7 @@ export class SourceReferencePopover {
             });
             locationRow.createSpan({
                 cls: 'block-reference-source-popover-item-line',
-                text: `L${item.reference.line + 1}`,
+				text: t('popover.line', { line: item.reference.line + 1 }),
             });
 
             this.renderPreviewContext(row, item.previewContext);
@@ -332,8 +337,8 @@ export class SourceReferencePopover {
                 cls: 'block-reference-source-popover-nav',
                 attr: {
                     type: 'button',
-                    'aria-label': 'Previous page',
-                    title: 'Previous page',
+					'aria-label': t('aria.previousPage'),
+					title: t('aria.previousPage'),
                 },
             });
             setIcon(previousButton, 'chevron-left');
@@ -355,8 +360,8 @@ export class SourceReferencePopover {
                 cls: 'block-reference-source-popover-nav',
                 attr: {
                     type: 'button',
-                    'aria-label': 'Next page',
-                    title: 'Next page',
+					'aria-label': t('aria.nextPage'),
+					title: t('aria.nextPage'),
                 },
             });
             setIcon(nextButton, 'chevron-right');
@@ -412,7 +417,7 @@ export class SourceReferencePopover {
     }
 
     private getReferenceKindLabel(kind: BlockReferenceLocation['kind']): string {
-        return kind === 'embed' ? 'EMBED' : 'REF';
+		return kind === 'embed' ? t('popover.kind.embed') : t('popover.kind.reference');
     }
 
     private getFileName(filePath: string): string {
@@ -421,7 +426,7 @@ export class SourceReferencePopover {
     }
 
     private getReferenceCountLabel(total: number): string {
-        return total === 1 ? '1 ref' : `${total} refs`;
+		return total === 1 ? t('popover.countOne') : t('popover.countMany', { count: total });
     }
 
     private updateDetailsState(button: HTMLButtonElement) {
@@ -433,7 +438,7 @@ export class SourceReferencePopover {
         this.containerEl.classList.toggle('is-details-collapsed', this.detailsCollapsed);
         button.empty();
         button.setAttribute('aria-expanded', String(expanded));
-        button.setAttribute('aria-label', expanded ? 'Collapse reference details' : 'Expand reference details');
+		button.setAttribute('aria-label', expanded ? t('aria.collapseReferenceDetails') : t('aria.expandReferenceDetails'));
         setIcon(button, expanded ? 'chevron-up' : 'chevron-down');
     }
 

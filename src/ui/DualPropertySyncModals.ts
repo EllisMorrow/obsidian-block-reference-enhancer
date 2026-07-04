@@ -5,6 +5,7 @@ import type {
 	DualPropertyConflict,
 	DualPropertyConflictChoice,
 } from '../dual-property-sync/types';
+import { t } from '../i18n';
 
 export function confirmDualPropertyBatch(
 	app: App,
@@ -43,24 +44,24 @@ class DualPropertyBatchConfirmModal extends Modal {
 
 	onOpen() {
 		const isCleanup = this.operation === 'cleanup';
-		this.setTitle(isCleanup ? 'Return to Logseq-only page properties' : 'Sync page properties');
+		this.setTitle(isCleanup ? t('sync.confirm.cleanupTitle') : t('sync.confirm.syncTitle'));
 		this.contentEl.createEl('p', {
 			text: isCleanup
-				? 'Only files whose YAML is fully represented by Logseq page properties will be changed. Unsafe files will be skipped.'
-				: 'Review the scan summary before changing files. Files changed after scanning will be skipped.',
+				? t('sync.confirm.cleanupDesc')
+				: t('sync.confirm.syncDesc'),
 		});
 		this.contentEl.createEl('ul').append(
-			createListItem(this.contentEl.ownerDocument, `Files scanned: ${this.summary.totalFiles}`),
-			createListItem(this.contentEl.ownerDocument, `Files to change: ${this.summary.changeFiles}`),
-			createListItem(this.contentEl.ownerDocument, `YAML repairs: ${this.summary.repairFiles}`),
-			createListItem(this.contentEl.ownerDocument, `Conflicts: ${this.summary.conflictFiles}`),
-			createListItem(this.contentEl.ownerDocument, `Skipped: ${this.summary.skippedFiles}`),
+			createListItem(this.contentEl.ownerDocument, t('sync.summary.scanned', { count: this.summary.totalFiles })),
+			createListItem(this.contentEl.ownerDocument, t('sync.summary.changes', { count: this.summary.changeFiles })),
+			createListItem(this.contentEl.ownerDocument, t('sync.summary.repairs', { count: this.summary.repairFiles })),
+			createListItem(this.contentEl.ownerDocument, t('sync.summary.conflicts', { count: this.summary.conflictFiles })),
+			createListItem(this.contentEl.ownerDocument, t('sync.summary.skipped', { count: this.summary.skippedFiles })),
 		);
 
 		new Setting(this.contentEl)
-			.addButton((button) => button.setButtonText('Cancel').onClick(() => this.settle(false)))
+			.addButton((button) => button.setButtonText(t('action.cancel')).onClick(() => this.settle(false)))
 			.addButton((button) => {
-				button.setButtonText(isCleanup ? 'Remove safe YAML and disable sync' : 'Continue');
+				button.setButtonText(isCleanup ? t('action.removeYamlAndDisable') : t('action.continue'));
 				if (isCleanup) button.setWarning();
 				else button.setCta();
 				button.onClick(() => this.settle(true));
@@ -93,21 +94,21 @@ class DualPropertyConflictModal extends Modal {
 	}
 
 	onOpen() {
-		this.setTitle('Resolve page property conflicts');
+		this.setTitle(t('sync.conflicts.title'));
 		this.contentEl.addClass('block-reference-dual-property-conflicts');
 		this.contentEl.createEl('p', {
-			text: 'Both property formats changed and their order cannot be determined safely. Skipping is the default.',
+			text: t('sync.conflicts.desc'),
 		});
 
 		for (const conflict of this.conflicts) {
 			this.choices[conflict.filePath] = 'skip';
 			new Setting(this.contentEl)
 				.setName(conflict.filePath)
-				.setDesc(`Conflicting properties: ${conflict.ruleIds.join(', ')}`)
+				.setDesc(t('sync.conflicts.properties', { properties: conflict.ruleIds.join(', ') }))
 				.addDropdown((dropdown) => dropdown
-					.addOption('skip', 'Skip')
-					.addOption('yaml', 'Use Obsidian YAML')
-					.addOption('logseq', 'Use Logseq properties')
+					.addOption('skip', t('sync.conflicts.skip'))
+					.addOption('yaml', t('sync.conflicts.useYaml'))
+					.addOption('logseq', t('sync.conflicts.useLogseq'))
 					.setValue('skip')
 					.onChange((value) => {
 						this.choices[conflict.filePath] = value as DualPropertyConflictChoice;
@@ -115,8 +116,8 @@ class DualPropertyConflictModal extends Modal {
 		}
 
 		new Setting(this.contentEl)
-			.addButton((button) => button.setButtonText('Cancel').onClick(() => this.settle(null)))
-			.addButton((button) => button.setButtonText('Apply choices').setCta().onClick(() => this.settle({ ...this.choices })));
+			.addButton((button) => button.setButtonText(t('action.cancel')).onClick(() => this.settle(null)))
+			.addButton((button) => button.setButtonText(t('action.applyChoices')).setCta().onClick(() => this.settle({ ...this.choices })));
 	}
 
 	onClose() {
@@ -138,28 +139,34 @@ class DualPropertyBatchReportModal extends Modal {
 	}
 
 	onOpen() {
-		this.setTitle(this.report.operation === 'cleanup' ? 'Logseq-only cleanup report' : 'Page property sync report');
+		this.setTitle(this.report.operation === 'cleanup' ? t('sync.report.cleanupTitle') : t('sync.report.syncTitle'));
 		this.contentEl.createEl('p', {
-			text: `Changed ${this.report.changed.length}; repaired ${this.report.repaired.length}; unchanged ${this.report.unchanged.length}; skipped ${this.report.skipped.length}; conflicts ${this.report.conflicts.length}.`,
+			text: t('sync.report.summary', {
+				changed: this.report.changed.length,
+				repaired: this.report.repaired.length,
+				unchanged: this.report.unchanged.length,
+				skipped: this.report.skipped.length,
+				conflicts: this.report.conflicts.length,
+			}),
 		});
-		appendReportSection(this.contentEl, 'Changed', this.report.changed);
-		appendReportSection(this.contentEl, 'Repaired', this.report.repaired);
-		appendReportSection(this.contentEl, 'Conflicts', this.report.conflicts);
-		appendReportSection(this.contentEl, 'Skipped', this.report.skipped.map((item) => `${item.filePath}: ${item.reason}`));
+		appendReportSection(this.contentEl, t('sync.report.changed'), this.report.changed);
+		appendReportSection(this.contentEl, t('sync.report.repaired'), this.report.repaired);
+		appendReportSection(this.contentEl, t('sync.report.conflicts'), this.report.conflicts);
+		appendReportSection(this.contentEl, t('sync.report.skipped'), this.report.skipped.map((item) => `${item.filePath}: ${item.reason}`));
 		new Setting(this.contentEl)
-			.addButton((button) => button.setButtonText('Copy report').onClick(async () => {
+			.addButton((button) => button.setButtonText(t('action.copyReport')).onClick(async () => {
 				if (!navigator.clipboard?.writeText) {
-					new Notice('Clipboard API unavailable on this platform.');
+					new Notice(t('notice.clipboardUnavailable'));
 					return;
 				}
 				try {
 					await navigator.clipboard.writeText(formatReport(this.report));
-					new Notice('Page property report copied.');
+					new Notice(t('sync.report.copied'));
 				} catch {
-					new Notice('Failed to copy the page property report.');
+					new Notice(t('sync.report.copyFailed'));
 				}
 			}))
-			.addButton((button) => button.setButtonText('Close').setCta().onClick(() => this.close()));
+			.addButton((button) => button.setButtonText(t('action.close')).setCta().onClick(() => this.close()));
 	}
 
 	onClose() {
@@ -181,17 +188,17 @@ function appendReportSection(container: HTMLElement, title: string, lines: strin
 		list.createEl('li', { text: line });
 	}
 	if (lines.length > 200) {
-		list.createEl('li', { text: `...and ${lines.length - 200} more.` });
+		list.createEl('li', { text: t('sync.report.more', { count: lines.length - 200 }) });
 	}
 }
 
 function formatReport(report: DualPropertyBatchReport): string {
 	const sections: Array<[string, string[]]> = [
-		['Changed', report.changed],
-		['Repaired', report.repaired],
-		['Unchanged', report.unchanged],
-		['Conflicts', report.conflicts],
-		['Skipped', report.skipped.map((item) => `${item.filePath}: ${item.reason}`)],
+		[t('sync.report.changed'), report.changed],
+		[t('sync.report.repaired'), report.repaired],
+		[t('sync.report.unchanged'), report.unchanged],
+		[t('sync.report.conflicts'), report.conflicts],
+		[t('sync.report.skipped'), report.skipped.map((item) => `${item.filePath}: ${item.reason}`)],
 	];
 	return sections
 		.filter(([, lines]) => lines.length > 0)

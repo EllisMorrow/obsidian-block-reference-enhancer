@@ -2,6 +2,7 @@ import { EditorView, WidgetType } from "@codemirror/view";
 import { createBlockReferenceActionButtonsElement } from "src/ui/BlockReferenceActionButtonsElement";
 import { replaceChildrenFromHtml } from "src/utils/html";
 import { measureWidgetCoords } from "src/utils/widgetCoords";
+import { t } from "src/i18n";
 
 export type BlockRenderMode = "inline" | "embed";
 export interface BlockWidgetInteraction {
@@ -101,7 +102,7 @@ export class BlockReferenceWidget extends WidgetType {
         if (this.interaction) {
             if (this.interaction.stale) {
                 card.addClass("is-stale");
-                card.setAttribute("title", "Source block missing. Showing cached content.");
+                card.setAttribute("title", t('render.staleBlock'));
             }
 
             if (this.interaction.availableInlineWidthPx !== undefined) {
@@ -137,12 +138,12 @@ export class BlockReferenceWidget extends WidgetType {
             embed.className = "block-reference-embed block-reference-live-preview-embed-card";
 
             if (this.state === "loading") {
-                embed.setText("Loading block...");
+                embed.setText(t('render.loadingBlock'));
                 card.addClass("is-loading");
             } else if (this.state === "rendered" && this.content) {
                 replaceChildrenFromHtml(embed, this.content);
             } else {
-                embed.setText("Error: Invalid state");
+                embed.setText(t('render.invalidState'));
                 card.addClass("is-error");
             }
 
@@ -159,7 +160,7 @@ export class BlockReferenceWidget extends WidgetType {
             if (reservedHeight > 0) {
                 card.style.minHeight = `${reservedHeight}px`;
             }
-            card.setText(this.mode === "embed" ? "Loading block..." : "Loading...");
+            card.setText(this.mode === "embed" ? t('render.loadingBlock') : t('render.loading'));
             card.addClass("is-loading");
         } else if (this.state === "rendered" && this.content) {
             if (this.mode === "embed") {
@@ -168,7 +169,7 @@ export class BlockReferenceWidget extends WidgetType {
                 card.setText(this.content);
             }
         } else {
-            card.setText("Error: Invalid state");
+            card.setText(t('render.invalidState'));
             card.addClass("is-error");
         }
 
@@ -214,11 +215,11 @@ export class BlockReferenceWidget extends WidgetType {
 
         if (this.interaction?.stale) {
             container.addClass("is-stale");
-            container.setAttribute("title", "Source block missing. Showing cached content.");
+            container.setAttribute("title", t('render.staleBlock'));
         }
 
         if (this.state === "loading") {
-            container.setText("Loading...");
+            container.setText(t('render.loading'));
             container.addClass("is-loading");
         } else if (this.state === "rendered" && this.content) {
             const text = doc.createElement("span");
@@ -226,7 +227,7 @@ export class BlockReferenceWidget extends WidgetType {
             text.setText(this.content);
             container.appendChild(text);
         } else {
-            container.setText("Error: Invalid state");
+            container.setText(t('render.invalidState'));
             container.addClass("is-error");
         }
 

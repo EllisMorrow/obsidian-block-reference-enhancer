@@ -1,5 +1,6 @@
 import { App, Modal, Setting } from 'obsidian';
 import type BlockReferenceEnhancer from '../main';
+import { t } from '../i18n';
 
 export class StaleBlockReviewModal extends Modal {
     private readonly ignoredIds = new Set<string>();
@@ -9,7 +10,7 @@ export class StaleBlockReviewModal extends Modal {
     }
 
     onOpen() {
-        this.setTitle('Review missing source blocks');
+		this.setTitle(t('stale.title'));
         this.render();
     }
 
@@ -26,17 +27,17 @@ export class StaleBlockReviewModal extends Modal {
 
         if (staleBlocks.length === 0) {
             this.contentEl.createEl('p', {
-                text: 'No missing source blocks need review right now.',
+				text: t('stale.none'),
             });
             return;
         }
 
         this.contentEl.createEl('p', {
-            text: `${staleBlocks.length} missing source blocks still have active references.`,
+			text: t('stale.count', { count: staleBlocks.length }),
         });
 
         for (const staleBlock of staleBlocks) {
-            const summary = staleBlock.block.rawContent.split(/\r?\n/, 1)[0] || '[empty block]';
+			const summary = staleBlock.block.rawContent.split(/\r?\n/, 1)[0] || t('stale.emptyBlock');
             const container = this.contentEl.createDiv({ cls: 'block-reference-stale-review-item' });
             container.createEl('div', {
                 text: summary,
@@ -47,7 +48,7 @@ export class StaleBlockReviewModal extends Modal {
                 cls: 'block-reference-stale-review-meta',
             });
             container.createEl('div', {
-                text: `${staleBlock.block.filePath} | ${staleBlock.references.length} references`,
+				text: t('stale.meta', { path: staleBlock.block.filePath, count: staleBlock.references.length }),
                 cls: 'block-reference-stale-review-meta',
             });
 
@@ -55,7 +56,7 @@ export class StaleBlockReviewModal extends Modal {
             actionSetting
                 .addButton((button) => {
                     button
-                        .setButtonText('Restore recovery page')
+						.setButtonText(t('action.restoreRecoveryPage'))
                         .setCta()
                         .onClick(async () => {
                             this.setBusy(container, true);
@@ -66,9 +67,9 @@ export class StaleBlockReviewModal extends Modal {
                 .addButton((button) => {
                     button
                         .setWarning()
-                        .setButtonText('Confirm deletion')
+						.setButtonText(t('action.confirmDeletion'))
                         .onClick(async () => {
-                            const confirmed = window.confirm('Confirm deletion for this missing source block? References will fall back to Missing block.');
+							const confirmed = window.confirm(t('stale.confirm'));
                             if (!confirmed) {
                                 return;
                             }
@@ -80,7 +81,7 @@ export class StaleBlockReviewModal extends Modal {
                 })
                 .addButton((button) => {
                     button
-                        .setButtonText('Ignore for now')
+						.setButtonText(t('action.ignoreForNow'))
                         .onClick(() => {
                             this.ignoredIds.add(staleBlock.id);
                             this.render();

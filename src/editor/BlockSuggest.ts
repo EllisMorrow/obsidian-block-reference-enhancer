@@ -2,6 +2,7 @@ import { App, Editor, EditorPosition, EditorSuggest, EditorSuggestContext, Edito
 import { IndexService } from '../services/IndexService';
 import { BlockCache } from '../types';
 import { matchesBlockSuggestContext, resolveBlockSuggestEditEndCh } from './BlockSuggestRange';
+import { t } from '../i18n';
 
 interface SuggestionItem {
     id: string;
@@ -50,11 +51,11 @@ export class BlockSuggest extends EditorSuggest<SuggestionItem> {
         });
 
         const goToButton = row.createEl('button', {
-            text: 'Go to',
+            text: t('action.goTo'),
             cls: 'block-reference-suggest-go-to',
             attr: {
                 type: 'button',
-                'aria-label': 'Go to source block',
+                'aria-label': t('aria.goToSource'),
             },
         });
         goToButton.addEventListener('mousedown', (event) => {
@@ -111,13 +112,13 @@ export class BlockSuggest extends EditorSuggest<SuggestionItem> {
 
         const block = this.indexService.getBlock(item.id);
         if (!block || block.status !== 'active') {
-            new Notice('Source block is no longer available.');
+            new Notice(t('notice.suggestSourceUnavailable'));
             return;
         }
 
         const file = this.app.vault.getAbstractFileByPath(block.filePath);
         if (!(file instanceof TFile)) {
-            new Notice('Unable to open the source block file.');
+            new Notice(t('notice.suggestFileUnavailable'));
             return;
         }
 
@@ -128,7 +129,7 @@ export class BlockSuggest extends EditorSuggest<SuggestionItem> {
             await this.openBlock(block);
         } catch (error) {
             console.error('Unable to open block suggestion target:', error);
-            new Notice('Unable to open the source block.');
+            new Notice(t('notice.suggestOpenFailed'));
         }
     }
 }

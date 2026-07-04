@@ -3,6 +3,7 @@ import type BlockReferenceEnhancer from '../main';
 import { DEFAULT_HIDDEN_LOGSEQ_PROPERTY_KEYS } from '../services/LogseqPropertyMatcher';
 import { getDocument } from '../utils/dom';
 import { DEFAULT_DUAL_PROPERTY_WHITELIST, parseDualPropertyRules } from '../dual-property-sync/rules';
+import { t } from '../i18n';
 
 const SETTINGS_SAVE_DEBOUNCE_MS = 250;
 
@@ -30,12 +31,12 @@ export class BlockReferenceEnhancerSettingTab extends PluginSettingTab {
 		const doc = getDocument(containerEl);
 
 		new Setting(containerEl)
-			.setName('Property hiding')
+			.setName(t('settings.propertyHiding.heading'))
 			.setHeading();
 
 		new Setting(containerEl)
-			.setName('Hide Logseq-style property lines')
-			.setDesc('Only hides matching key:: value property lines under unordered-list blocks in Obsidian. Markdown files are not modified.')
+			.setName(t('settings.propertyHiding.name'))
+			.setDesc(t('settings.propertyHiding.desc'))
 			.addToggle((toggle) => {
 				toggle
 					.setValue(this.plugin.settings.hideLogseqProperties)
@@ -47,7 +48,7 @@ export class BlockReferenceEnhancerSettingTab extends PluginSettingTab {
 			});
 
 		new Setting(containerEl)
-			.setName('Hidden property keys')
+			.setName(t('settings.hiddenKeys.name'))
 			.setDesc(this.createRulesDescription(doc))
 			.addTextArea((textArea) => {
 				textArea
@@ -65,7 +66,7 @@ export class BlockReferenceEnhancerSettingTab extends PluginSettingTab {
 			.addExtraButton((button) => {
 				button
 					.setIcon('reset')
-					.setTooltip('Reset to defaults')
+					.setTooltip(t('settings.reset'))
 					.onClick(async () => {
 						this.plugin.settings.hiddenLogseqPropertyKeys = DEFAULT_HIDDEN_LOGSEQ_PROPERTY_KEYS;
 						await this.plugin.saveSettings();
@@ -75,12 +76,12 @@ export class BlockReferenceEnhancerSettingTab extends PluginSettingTab {
 			});
 
 		new Setting(containerEl)
-			.setName('Experimental')
+			.setName(t('settings.experimental.heading'))
 			.setHeading();
 
 		new Setting(containerEl)
-			.setName('Convert pasted content to outline')
-			.setDesc('Adds right-click menu actions on unordered-list blocks, including empty ones. It can paste clipboard HTML or text as child outline blocks without changing normal paste behavior.')
+			.setName(t('settings.outlinePaste.name'))
+			.setDesc(t('settings.outlinePaste.desc'))
 			.addToggle((toggle) => {
 				toggle
 					.setValue(this.plugin.settings.enablePasteClipboardAsOutline)
@@ -91,12 +92,12 @@ export class BlockReferenceEnhancerSettingTab extends PluginSettingTab {
 			});
 
 		new Setting(containerEl)
-			.setName('Logseq ↔ Obsidian page properties (Experimental)')
+			.setName(t('settings.propertySync.heading'))
 			.setHeading();
 
 		new Setting(containerEl)
-			.setName('Keep Logseq and Obsidian page properties in sync')
-			.setDesc('Maintain whitelisted page properties in both Logseq key:: value format and Obsidian YAML frontmatter. Only enabled files and whitelisted properties are changed. Back up your vault before using batch operations.')
+			.setName(t('settings.propertySync.name'))
+			.setDesc(t('settings.propertySync.desc'))
 			.addToggle((toggle) => {
 				toggle
 					.setValue(this.plugin.settings.enableDualPagePropertySync)
@@ -108,7 +109,7 @@ export class BlockReferenceEnhancerSettingTab extends PluginSettingTab {
 			});
 
 		new Setting(containerEl)
-			.setName('Property sync whitelist')
+			.setName(t('settings.whitelist.name'))
 			.setDesc(this.createDualPropertyWhitelistDescription(doc))
 			.addTextArea((textArea) => {
 				textArea
@@ -125,7 +126,7 @@ export class BlockReferenceEnhancerSettingTab extends PluginSettingTab {
 			.addExtraButton((button) => {
 				button
 					.setIcon('reset')
-					.setTooltip('Reset to defaults')
+					.setTooltip(t('settings.reset'))
 					.setDisabled(!this.plugin.settings.enableDualPagePropertySync)
 					.onClick(async () => {
 						this.plugin.settings.dualPagePropertyWhitelist = DEFAULT_DUAL_PROPERTY_WHITELIST;
@@ -137,13 +138,13 @@ export class BlockReferenceEnhancerSettingTab extends PluginSettingTab {
 		const parsedRules = parseDualPropertyRules(this.plugin.settings.dualPagePropertyWhitelist);
 		if (parsedRules.errors.length > 0) {
 			new Setting(containerEl)
-				.setName('Whitelist needs attention')
+				.setName(t('settings.whitelist.warning'))
 				.setDesc(parsedRules.errors.join(' '));
 		}
 
 		new Setting(containerEl)
-			.setName('Selected folders')
-			.setDesc('One vault-relative folder per line. Subfolders are included. Use . for the whole vault. Folder scans only start when you click the batch action.')
+			.setName(t('settings.folders.name'))
+			.setDesc(t('settings.folders.desc'))
 			.addTextArea((textArea) => {
 				textArea
 					.setValue(this.plugin.settings.dualPagePropertyFolders)
@@ -158,31 +159,31 @@ export class BlockReferenceEnhancerSettingTab extends PluginSettingTab {
 			});
 
 		new Setting(containerEl)
-			.setName('Sync current file')
-			.setDesc('Synchronize only the active Markdown file. If both formats changed, you will be asked which side to keep.')
+			.setName(t('settings.syncCurrent.name'))
+			.setDesc(t('settings.syncCurrent.desc'))
 			.addButton((button) => button
-				.setButtonText('Sync current file')
+				.setButtonText(t('settings.syncCurrent.name'))
 				.setDisabled(!this.plugin.settings.enableDualPagePropertySync || parsedRules.errors.length > 0)
 				.onClick(() => void this.plugin.syncDualPagePropertiesCurrentFile()));
 
 		new Setting(containerEl)
-			.setName('Selected folder batch sync')
-			.setDesc('Scans selected folders first, shows a summary, and writes only after confirmation. Files changed after the scan are skipped.')
+			.setName(t('settings.syncFolders.name'))
+			.setDesc(t('settings.syncFolders.desc'))
 			.addButton((button) => button
-				.setButtonText('Scan and sync selected folders…')
+				.setButtonText(t('settings.syncFolders.button'))
 				.setCta()
 				.setDisabled(!this.plugin.settings.enableDualPagePropertySync || parsedRules.errors.length > 0)
 				.onClick(() => void this.plugin.scanAndSyncDualPagePropertyFolders()));
 
 		new Setting(containerEl)
-			.setName('Return to Logseq-only page properties')
+			.setName(t('settings.logseqOnly.heading'))
 			.setHeading();
 
 		new Setting(containerEl)
-			.setName('Remove Obsidian YAML and disable sync')
-			.setDesc('Removes YAML only when every YAML value is represented equivalently by Logseq page properties. Unsafe files are skipped and reported. The sync feature is disabled afterward.')
+			.setName(t('settings.logseqOnly.name'))
+			.setDesc(t('settings.logseqOnly.desc'))
 			.addButton((button) => button
-				.setButtonText('Remove safe YAML and disable sync…')
+				.setButtonText(t('settings.logseqOnly.button'))
 				.setWarning()
 				.setDisabled(!this.plugin.settings.enableDualPagePropertySync || parsedRules.errors.length > 0)
 				.onClick(() => void this.plugin.returnDualPagePropertyFoldersToLogseqOnly()));
@@ -204,21 +205,22 @@ export class BlockReferenceEnhancerSettingTab extends PluginSettingTab {
 
 	private createRulesDescription(doc: Document): DocumentFragment {
 		const fragment = doc.createDocumentFragment();
-		fragment.append('Use ');
+		fragment.append(t('settings.hiddenRules.beforeSeparator'));
 		fragment.appendChild(this.createInlineCode(doc, '\\\\'));
-		fragment.append(' as the separator between rules.');
+		fragment.append(t('settings.hiddenRules.afterSeparator'));
 		fragment.appendChild(doc.createElement('br'));
-		fragment.append('Examples in notes: ');
+		fragment.append(t('settings.hiddenRules.examples'));
 		fragment.appendChild(this.createInlineCode(doc, 'hl:: value'));
-		fragment.append(' hides only the exact key ');
+		fragment.append(t('settings.hiddenRules.exactBefore'));
 		fragment.appendChild(this.createInlineCode(doc, 'hl'));
-		fragment.append('. ');
+		fragment.append(t('settings.hiddenRules.exactAfter'));
 		fragment.appendChild(this.createInlineCode(doc, 'hl-*:: value'));
-		fragment.append(' hides any key that starts with ');
+		fragment.append(t('settings.hiddenRules.prefixBefore'));
 		fragment.appendChild(this.createInlineCode(doc, 'hl-'));
-		fragment.append('. In the setting box, write only the key rules themselves, for example ');
+		fragment.append(t('settings.hiddenRules.prefixAfter'));
+		fragment.append(t('settings.hiddenRules.boxBefore'));
 		fragment.appendChild(this.createInlineCode(doc, 'collapsed\\\\id\\\\hl-*'));
-		fragment.append('.');
+		fragment.append(t('settings.hiddenRules.boxAfter'));
 		return fragment;
 	}
 
@@ -230,11 +232,11 @@ export class BlockReferenceEnhancerSettingTab extends PluginSettingTab {
 
 	private createDualPropertyWhitelistDescription(doc: Document): DocumentFragment {
 		const fragment = doc.createDocumentFragment();
-		fragment.append('Use one rule per line. ');
+		fragment.append(t('settings.whitelist.beforeMapping'));
 		fragment.appendChild(this.createInlineCode(doc, 'alias<->aliases'));
-		fragment.append(' maps a Logseq key to a differently named YAML key. ');
+		fragment.append(t('settings.whitelist.afterMapping'));
 		fragment.appendChild(this.createInlineCode(doc, 'tags'));
-		fragment.append(' uses the same key on both sides. Only the built-in alias mapping supports lists; custom rules support string values only. Block-only keys such as id and collapsed are protected.');
+		fragment.append(t('settings.whitelist.sameKeyBefore'));
 		return fragment;
 	}
 }

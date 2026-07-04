@@ -20,6 +20,10 @@ It is a display enhancer and renderer, and it also builds a local block index an
 
 <img alt="演示-20260702001852" src="https://github.com/user-attachments/assets/335cb127-b120-44fa-b23b-267ec4962072" />
 
+### Interface languages
+
+The plugin follows Obsidian's interface language automatically. English and Simplified Chinese are included. Chinese locales, including `zh-TW`, use the Simplified Chinese interface; unsupported languages fall back to English.
+
 ## ✨ What It Does
 
 If your notes already use UUID-style blocks, this plugin makes them readable inside Obsidian without forcing you to rewrite your notes.

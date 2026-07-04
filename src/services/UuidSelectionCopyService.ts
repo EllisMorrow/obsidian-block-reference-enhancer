@@ -1,6 +1,7 @@
 import type { BlockCache } from '../types';
 import { normalizeEmbedChildrenMarkdown, measureIndentColumns, removeLeadingIndentColumns } from '../utils/blockMarkdown';
 import { getOpeningMarkdownFenceState, isClosingMarkdownFence, type MarkdownFenceState } from '../utils/markdownFence';
+import { t } from '../i18n';
 
 const UUID_PATTERN = '[A-Za-z0-9_-]{36,}';
 const STANDALONE_EMBED_LINE_REGEX = new RegExp(
@@ -136,16 +137,16 @@ function renderEmbedAsOutline(
 	state: ConversionState,
 ): string {
 	if (state.visitedEmbeds.has(uuid)) {
-		return `${hostIndent}- [Cyclic block]`;
+		return `${hostIndent}- ${t('render.cyclicBlockBracketed')}`;
 	}
 
 	if (state.depth >= context.maxDepth) {
-		return `${hostIndent}- [Embed depth limit reached]`;
+		return `${hostIndent}- ${t('render.embedDepthLimit')}`;
 	}
 
 	const block = context.resolver.resolveBlock(uuid);
 	if (!block) {
-		return `${hostIndent}- [Missing block]`;
+		return `${hostIndent}- ${t('render.missingBlockBracketed')}`;
 	}
 
 	const nextVisited = new Set(state.visitedEmbeds);
@@ -160,7 +161,7 @@ function renderEmbedAsOutline(
 
 function buildBlockOutlineMarkdown(block: BlockCache): string {
 	const rawLines = normalizeBlockRootLines(block.rawContent);
-	const firstLine = rawLines[0]?.trimEnd() || '[Empty block]';
+	const firstLine = rawLines[0]?.trimEnd() || t('render.emptyBlockBracketed');
 	const lines = [`- ${firstLine}`];
 
 	for (const line of rawLines.slice(1)) {
@@ -203,7 +204,7 @@ function replaceInlineUuidSyntax(segment: string, context: ConversionContext): s
 	return segment.replace(syntaxRegex, (_match, embedUuid: string | undefined, inlineUuid: string | undefined, fullwidthUuid: string | undefined) => {
 		context.replacementCount += 1;
 		const uuid = embedUuid ?? inlineUuid ?? fullwidthUuid;
-		return uuid ? context.resolver.resolveInlineSummary(uuid) ?? '[Missing block]' : _match;
+		return uuid ? context.resolver.resolveInlineSummary(uuid) ?? t('render.missingBlockBracketed') : _match;
 	});
 }
 
@@ -302,7 +303,7 @@ function assertWithinOutputLimit(text: string, maxOutputChars: number): void {
 	if (text.length > maxOutputChars) {
 		throw new UuidSelectionCopyError(
 			'output-too-large',
-			`Converted selection exceeds the ${maxOutputChars}-character safety limit.`,
+			t('render.selectionLimit', { count: maxOutputChars }),
 		);
 	}
 }

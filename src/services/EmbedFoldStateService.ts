@@ -1,3 +1,5 @@
+import { t } from '../i18n';
+
 export type PersistedEmbedFoldState = Record<string, string[]>;
 
 export interface EmbedOccurrenceIdentity {
@@ -193,7 +195,7 @@ export class EmbedFoldStateService {
 
 	private applyCollapsedState(button: HTMLElement, childLists: HTMLElement[], collapsed: boolean) {
 		button.setAttribute('aria-expanded', String(!collapsed));
-		button.setAttribute('aria-label', collapsed ? 'Expand embedded outline' : 'Collapse embedded outline');
+		button.setAttribute('aria-label', collapsed ? t('aria.expandEmbedOutline') : t('aria.collapseEmbedOutline'));
 		button.toggleClass('is-collapsed', collapsed);
 		for (const childList of childLists) {
 			childList.dataset.blockRefFoldManaged = 'true';

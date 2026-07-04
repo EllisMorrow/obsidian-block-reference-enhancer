@@ -20,6 +20,10 @@ English documentation is available in [README.md](./README.md).
 
 <img alt="演示-20260702001852" src="https://github.com/user-attachments/assets/335cb127-b120-44fa-b23b-267ec4962072" />
 
+### 界面语言
+
+插件会自动跟随 Obsidian 的界面语言。内置英文和简体中文；包括 `zh-TW` 在内的中文语言环境统一使用简体中文，其他未支持的语言回退为英文。
+
 ## ✨ 这个插件能做什么
 
 如果你的笔记已经是 UUID 风格的块结构，这个插件可以让它们在 Obsidian 里更自然地工作，而不用你重写整套笔记格式。

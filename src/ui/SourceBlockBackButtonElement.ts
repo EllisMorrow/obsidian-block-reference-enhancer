@@ -1,4 +1,5 @@
 import { getDocument } from '../utils/dom';
+import { t } from '../i18n';
 
 export function createSourceBlockBackButtonElement(
 	blockId: string,
@@ -8,7 +9,7 @@ export function createSourceBlockBackButtonElement(
 	button.type = 'button';
 	button.className = 'block-reference-back-button';
 	button.dataset.blockRefSourceId = blockId;
-	button.setAttribute('aria-label', 'Open source block');
-	button.setText('Back');
+	button.setAttribute('aria-label', t('aria.openSource'));
+	button.setText(t('action.back'));
 	return button;
 }

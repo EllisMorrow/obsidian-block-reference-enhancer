@@ -3,6 +3,7 @@ import type {
 	DualPropertySyncRule,
 	DualPropertyValue,
 } from './types';
+import { t } from '../i18n';
 
 export const DEFAULT_DUAL_PROPERTY_WHITELIST = 'alias<->aliases';
 
@@ -29,31 +30,34 @@ export function parseDualPropertyRules(text: string): DualPropertyRuleParseResul
 
 		const parts = line.split('<->');
 		if (parts.length > 2) {
-			errors.push(`Line ${index + 1}: use at most one <-> mapping operator.`);
+			errors.push(t('validation.rule.tooManyMappings', { line: index + 1 }));
 			return;
 		}
 
 		let logseqKey = normalizeRuleKey(parts[0]);
 		let yamlKey = parts.length === 2 ? normalizeRuleKey(parts[1]) : logseqKey;
 		if (!logseqKey || !yamlKey || !VALID_KEY_REGEX.test(logseqKey) || !VALID_KEY_REGEX.test(yamlKey)) {
-			errors.push(`Line ${index + 1}: property keys cannot contain spaces or YAML punctuation.`);
+			errors.push(t('validation.rule.invalidKey', { line: index + 1 }));
 			return;
 		}
 
 		const normalizedLogseqKey = logseqKey.toLocaleLowerCase();
 		const normalizedYamlKey = yamlKey.toLocaleLowerCase();
 		if (PROTECTED_KEYS.has(normalizedLogseqKey) || PROTECTED_KEYS.has(normalizedYamlKey)) {
-			errors.push(`Line ${index + 1}: ${logseqKey}<->${yamlKey} contains a protected block property.`);
+			errors.push(t('validation.rule.protected', {
+				line: index + 1,
+				mapping: `${logseqKey}<->${yamlKey}`,
+			}));
 			return;
 		}
 
 		if (logseqKeys.has(normalizedLogseqKey)) {
-			errors.push(`Line ${index + 1}: Logseq key ${logseqKey} is already mapped.`);
+			errors.push(t('validation.rule.duplicateLogseq', { line: index + 1, key: logseqKey }));
 			return;
 		}
 
 		if (yamlKeys.has(normalizedYamlKey)) {
-			errors.push(`Line ${index + 1}: YAML key ${yamlKey} is already mapped.`);
+			errors.push(t('validation.rule.duplicateYaml', { line: index + 1, key: yamlKey }));
 			return;
 		}
 

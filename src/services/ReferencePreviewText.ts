@@ -1,3 +1,5 @@
+import { t } from '../i18n';
+
 const UUID_PATTERN = '[A-Za-z0-9_-]{36,}';
 const DEFAULT_MAX_DEPTH = 8;
 
@@ -33,16 +35,16 @@ function resolveText(
 			}
 
 			if (visited.has(uuid)) {
-				return '[Cyclic block]';
+				return t('render.cyclicBlockBracketed');
 			}
 
 			if (depth >= maxDepth) {
-				return '[Reference depth limit]';
+				return t('render.referenceDepthLimit');
 			}
 
 			const summary = resolver.resolveSummary(uuid);
 			if (!summary) {
-				return '[Missing block]';
+				return t('render.missingBlockBracketed');
 			}
 
 			const nextVisited = new Set(visited);
