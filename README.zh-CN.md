@@ -17,7 +17,7 @@ English documentation is available in [README.md](./README.md).
 > 插件显示名：`Block Reference Enhancer`  
 > 插件 ID 和安装文件夹名：`block-reference-enhancer`  
 > GitHub 仓库保留 `obsidian-` 前缀，仅用于仓库命名，不是插件 ID。<br>
-> Obsidian 默认主题是这个插件保证正常运行和显示的基准主题，其他主题不保证能正常显示或正常交互。
+> 更推荐使用 Obsidian 默认主题或 Minimal；插件会持续维护对这两个主题的兼容性。其他主题不保证能正常显示或正常交互。
 
 <img alt="演示-20260702001852" src="https://github.com/user-attachments/assets/335cb127-b120-44fa-b23b-267ec4962072" />
 
@@ -101,13 +101,13 @@ English documentation is available in [README.md](./README.md).
 
 当光标离开这个块引用后，它也会在短时间内自动恢复为渲染状态。
 
-如果页面里有很多已经渲染好的块引用，插件会用更保守的行内保留窗口和宽度缓存，减少滚动、切页和快速切换焦点时的可见抖动。
+如果页面里有很多已经渲染好的块引用，插件会用更保守的行内保留窗口和宽度缓存，减少滚动、切页和快速切换焦点时的可见抖动。块引用和块嵌入也会按编辑器当前行的实际边界计算宽度，使列表缩进在 Obsidian 默认主题与 Minimal 下保持稳定。
 
 ### 块嵌入
 
 `{{embed ((uuid))}}` 会显示目标块本身和它的子级内容。
 
-块嵌入根节点和所有拥有子级的嵌入大纲节点，都会用紧凑的圆形三角按钮替代额外的列表圆点，用来折叠或展开该节点的子级。每一处块嵌入独立保存折叠状态，Live Preview 和 Reading Mode 都可使用，重启 Obsidian 后仍会保留。某处嵌入被删除或位置、UUID 发生变化时，旧状态会被清理；删除插件数据后，所有嵌入默认恢复为展开。
+块嵌入根节点和所有拥有子级的嵌入大纲节点，都会用紧凑的圆形三角按钮替代额外的列表圆点，用来折叠或展开该节点的子级。每一处块嵌入独立保存折叠状态，在 Live Preview 与 Reading Mode 之间切换时会保持同步，重启 Obsidian 后仍会保留。某处嵌入被删除或位置、UUID 发生变化时，旧状态会被清理；删除插件数据后，所有嵌入默认恢复为展开。
 
 折叠只影响视图，不会修改 Markdown 或缓存一份旧内容。源块保存后，所有块引用和块嵌入仍会同步最新索引内容，包括当前处于折叠状态的分支。
 
@@ -431,7 +431,7 @@ alias<->aliases
 ## ⚠️ 已知情况
 
 - 这个插件是 UUID 块引用与块嵌入语法增强器，不是 Logseq 替代品
-- Obsidian 默认主题是这个插件的兼容性基准主题，其他主题不保证能正常显示或正常交互
+- 更推荐使用 Obsidian 默认主题或 Minimal；插件会持续维护对这两个主题的兼容性。其他主题不保证能正常显示或正常交互
 - 在非常复杂的列表结构或高度定制主题下，Live Preview 仍可能有少量视觉差异
 - 源块丢失时恢复策略默认写入恢复页，不会自动按原文件和原行号插回去
 - **2026-07-03 — Obsidian 原生折叠问题：**该问题已在 [Obsidian 官方论坛提交](https://forum.obsidian.md/t/lists-folding-hides-content-outside-of-the-fold-when-switching-from-reading-to-edit-mode/103036)。使用 Obsidian 的“折叠所有标题和列表”后，特别是在阅读模式与实时预览之间切换时，部分列表内容可能继续被错误折叠。该问题在关闭全部第三方插件后仍可稳定复现，不是 Block Reference Enhancer 引起的。在 Obsidian 官方修复前，建议用户不要使用“折叠所有标题和列表”；如果已经发生，请执行“展开所有标题和列表”恢复被隐藏的内容。

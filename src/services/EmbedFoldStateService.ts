@@ -108,11 +108,38 @@ export class EmbedFoldStateService {
 			collapsedNodeKeys.delete(nodeKey);
 		}
 		this.replaceOccurrenceState(occurrenceKey, collapsedNodeKeys);
+		this.syncOccurrenceWithinDocument(button, occurrenceKey, collapsedNodeKeys);
 
 		if (button.dataset.blockRefFoldPersistent === 'true') {
 			this.scheduleSave();
 		}
 		return true;
+	}
+
+	private syncOccurrenceWithinDocument(
+		sourceButton: HTMLElement,
+		occurrenceKey: string,
+		collapsedNodeKeys: ReadonlySet<string>,
+	) {
+		sourceButton.ownerDocument.querySelectorAll<HTMLElement>('.block-reference-embed-fold-toggle').forEach((button) => {
+			if (button === sourceButton || button.dataset.blockRefFoldOccurrence !== occurrenceKey) {
+				return;
+			}
+
+			const nodeKey = button.dataset.blockRefFoldNode;
+			if (!nodeKey) {
+				return;
+			}
+
+			const foldTargets = button.hasClass('block-reference-embed-root-fold-toggle')
+				? this.findRootFoldTargets(button)
+				: this.findListItemFoldTargets(button);
+			if (foldTargets.length === 0) {
+				return;
+			}
+
+			this.applyCollapsedState(button, foldTargets, collapsedNodeKeys.has(nodeKey));
+		});
 	}
 
 	private enhanceEmbedRoot(

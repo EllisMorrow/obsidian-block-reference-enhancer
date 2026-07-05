@@ -16,7 +16,7 @@ It is a display enhancer and renderer, and it also builds a local block index an
 > Plugin display name: `Block Reference Enhancer`  
 > Plugin ID and install folder: `block-reference-enhancer`  
 > The GitHub repository keeps the `obsidian-` prefix only as a repository name.<br>
-> The Obsidian default theme is the baseline theme that this plugin is expected to work with correctly. Other themes are not guaranteed to render or behave correctly.
+> The Obsidian default theme and Minimal are the recommended themes and actively maintained compatibility baselines for this plugin. Other themes are not guaranteed to render or behave correctly.
 
 <img alt="演示-20260702001852" src="https://github.com/user-attachments/assets/335cb127-b120-44fa-b23b-267ec4962072" />
 
@@ -100,13 +100,13 @@ Hover, focus, or click the rendered reference to keep a small `Back` button visi
 
 If the cursor leaves that reference again, the inline reference automatically returns to its rendered state shortly after.
 
-Dense pages with many rendered references now keep a more conservative inline-render retention window and width cache, which reduces visible churn during scrolling, tab switching, and rapid focus changes.
+Dense pages with many rendered references now keep a more conservative inline-render retention window and width cache, which reduces visible churn during scrolling, tab switching, and rapid focus changes. Inline references and embeds also measure the actual editor line boundary, keeping list indentation stable in both the Obsidian default theme and Minimal.
 
 ### Block embeds
 
 `{{embed ((uuid))}}` is rendered as the target block plus its children.
 
-The embed root and every embedded outline item with children use a compact circular triangle in place of an extra list bullet. The control collapses or expands that node's children. Fold state is independent for each embed occurrence, works in Live Preview and Reading Mode, and is saved across restarts. Deleting or changing that embed occurrence removes its obsolete saved state; deleting plugin data resets all embedded outlines to expanded.
+The embed root and every embedded outline item with children use a compact circular triangle in place of an extra list bullet. The control collapses or expands that node's children. Fold state is independent for each embed occurrence, stays synchronized when switching between Live Preview and Reading Mode, and is saved across restarts. Deleting or changing that embed occurrence removes its obsolete saved state; deleting plugin data resets all embedded outlines to expanded.
 
 Folding is view-only. Source-block edits still refresh every reference and embed with the newest indexed content, including content inside a currently collapsed branch.
 
@@ -426,7 +426,7 @@ If you run into a problem:
 ## ⚠️ Known Limitations
 
 - This plugin is a UUID block reference and block embed syntax enhancer, not a Logseq replacement.
-- The Obsidian default theme is the compatibility baseline for this plugin. Other themes are not guaranteed to render or behave correctly.
+- The Obsidian default theme and Minimal are the recommended themes and actively maintained compatibility baselines for this plugin. Other themes are not guaranteed to render or behave correctly.
 - Live Preview can still show small visual differences in very complex lists or under heavily customized themes.
 - When a source block is missing, recovery defaults to the recovery page instead of restoring the block back into its original file and line position.
 - **2026-07-03 — Obsidian folding issue:** This issue has been [reported to Obsidian on the official forum](https://forum.obsidian.md/t/lists-folding-hides-content-outside-of-the-fold-when-switching-from-reading-to-edit-mode/103036). Obsidian can leave list content incorrectly folded after using `Fold all headings and lists`, especially when switching between Reading Mode and Live Preview. It is reproducible with all community plugins disabled and is not caused by Block Reference Enhancer. Until Obsidian fixes it, users are advised not to use `Fold all headings and lists`; if it occurs, run `Unfold all headings and lists` to restore the hidden content.

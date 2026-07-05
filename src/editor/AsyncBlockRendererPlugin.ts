@@ -14,6 +14,7 @@ import { replaceChildrenFromHtml } from "src/utils/html";
 import { getOpeningMarkdownFenceState, isClosingMarkdownFence, type MarkdownFenceState } from "src/utils/markdownFence";
 import { createEmbedOccurrenceKey } from "src/services/EmbedFoldStateService";
 import { t } from "src/i18n";
+import { calculateInlineAvailableWidth } from "./InlineWidgetGeometry";
 
 interface BlockRenderTarget {
     from: number;
@@ -68,6 +69,9 @@ interface ListEmbedOverlayEntry {
 interface InlineEmbedWidthGeometry {
     availableWidthPx: number;
     contentWidthPx: number;
+    lineLeftPx: number;
+    lineRightPx: number;
+    anchorLeftPx: number;
 }
 
 interface VisibleWidgetState {
@@ -334,7 +338,13 @@ export function createAsyncBlockRendererPlugin(plugin: BlockReferenceEnhancer) {
                     return;
                 }
 
-                if (update.viewportChanged || update.focusChanged) {
+                if (update.geometryChanged) {
+                    this.inlineEmbedWidthCache.clear();
+                    this.listEmbedLayoutCache.clear();
+                    this.lastScanFingerprint = "";
+                }
+
+                if (update.viewportChanged || update.geometryChanged || update.focusChanged) {
                     this.scheduleScan(LIVE_PREVIEW_VIEWPORT_SCAN_DEBOUNCE_MS);
                     return;
                 }
@@ -552,32 +562,45 @@ export function createAsyncBlockRendererPlugin(plugin: BlockReferenceEnhancer) {
                 const refId = getTargetRefId(target);
                 const contentWidthPx = Math.max(Math.floor(contentRect.width / 4) * 4, 0);
                 const cachedWidth = this.inlineEmbedWidthCache.get(refId);
-                if (cachedWidth) {
-                    const widthDeltaPx = contentWidthPx - cachedWidth.contentWidthPx;
-                    return {
-                        availableWidthPx: Math.max(cachedWidth.availableWidthPx + widthDeltaPx, 0),
-                        contentWidthPx,
-                    };
-                }
-
                 const anchorCoords = this.view.coordsAtPos(target.from);
-                if (!anchorCoords) {
+                const lineElement = this.findLineElementAtPos(target.from);
+                if (!anchorCoords || !lineElement) {
+                    return cachedWidth?.contentWidthPx === contentWidthPx ? cachedWidth : null;
+                }
+
+                // Some themes keep cm-content full width while centering narrower
+                // cm-line elements. The actual line is therefore the safe boundary.
+                const lineRect = lineElement.getBoundingClientRect();
+                const availableWidthPx = calculateInlineAvailableWidth({
+                    contentLeftPx: contentRect.left,
+                    contentRightPx: contentRect.right,
+                    lineLeftPx: lineRect.left,
+                    lineRightPx: lineRect.right,
+                    anchorLeftPx: anchorCoords.left,
+                    safetyPx: INLINE_WIDGET_WIDTH_SAFETY_PX,
+                });
+                if (availableWidthPx === null) {
                     return null;
                 }
 
-                // Keep the widget below the exact line boundary. A width that only
-                // fits by a fractional pixel can move to the next CM visual line
-                // during scroll remeasurement and lose the list indentation.
-                const rawAvailableWidthPx = contentRect.right
-                    - anchorCoords.left
-                    - INLINE_WIDGET_WIDTH_SAFETY_PX;
-                const availableWidthPx = Math.max(Math.floor(rawAvailableWidthPx / 4) * 4, 0);
+                return {
+                    availableWidthPx,
+                    contentWidthPx,
+                    lineLeftPx: lineRect.left,
+                    lineRightPx: lineRect.right,
+                    anchorLeftPx: anchorCoords.left,
+                };
+            }
 
-                if (availableWidthPx <= 0) {
+            private findLineElementAtPos(pos: number): HTMLElement | null {
+                try {
+                    const { node } = this.view.domAtPos(pos);
+                    const element = node.nodeType === 1 ? node as Element : node.parentElement;
+                    const line = element?.closest(".cm-line");
+                    return isHtmlElement(line) && this.view.contentDOM.contains(line) ? line : null;
+                } catch {
                     return null;
                 }
-
-                return { availableWidthPx, contentWidthPx };
             }
 
             private measureRenderTarget(target: BlockRenderTarget): BlockRenderTarget {
@@ -586,12 +609,11 @@ export function createAsyncBlockRendererPlugin(plugin: BlockReferenceEnhancer) {
 
                 if (target.mode === "inline" || target.preserveListMarker) {
                     const refId = getTargetRefId(target);
-                    const measuredWidth = this.measureInlineWidgetWidth(target);
-                    if (measuredWidth) {
-                        this.inlineEmbedWidthCache.set(refId, measuredWidth);
+                    const inlineWidth = this.measureInlineWidgetWidth(target);
+                    if (inlineWidth) {
+                        this.inlineEmbedWidthCache.set(refId, inlineWidth);
                     }
 
-                    const inlineWidth = measuredWidth ?? this.inlineEmbedWidthCache.get(refId);
                     if (!inlineWidth) {
                         return {
                             ...target,
