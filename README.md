@@ -41,7 +41,7 @@ You get:
 - Experimental right-click outline paste for unordered-list blocks
 - Experimental whitelist-based synchronization between Logseq page properties and Obsidian YAML frontmatter
 - Saved source-block edits automatically refresh existing references and embeds
-- Dense pages with many rendered references and embeds use a more stable inline rendering strategy to reduce scroll and tab-switch jitter
+- Dense pages reuse layout measurements and continue rendering through a bounded queue, avoiding repeated full-page scans during scrolling and tab switches
 - A local cache and block index for large vaults
 
 ## 👀 Best For
@@ -100,7 +100,7 @@ Hover, focus, or click the rendered reference to keep a small `Back` button visi
 
 If the cursor leaves that reference again, the inline reference automatically returns to its rendered state shortly after.
 
-Dense pages with many rendered references now keep a more conservative inline-render retention window and width cache, which reduces visible churn during scrolling, tab switching, and rapid focus changes. Inline references and embeds also measure the actual editor line boundary, keeping list indentation stable in both the Obsidian default theme and Minimal.
+Dense pages with many rendered references reuse horizontal layout measurements and continue pending work through a bounded render queue instead of rescanning the page for every batch. Vertical reflow caused by rendered widgets no longer invalidates every cached width; theme, font, list-indent, and editor-width changes still refresh measurements when needed. This reduces CPU and layout pressure during scrolling, tab switching, and rapid focus changes while keeping list indentation stable in both the Obsidian default theme and Minimal.
 
 ### Block embeds
 

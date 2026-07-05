@@ -14,7 +14,7 @@ import { replaceChildrenFromHtml } from "src/utils/html";
 import { getOpeningMarkdownFenceState, isClosingMarkdownFence, type MarkdownFenceState } from "src/utils/markdownFence";
 import { createEmbedOccurrenceKey } from "src/services/EmbedFoldStateService";
 import { t } from "src/i18n";
-import { calculateInlineAvailableWidth } from "./InlineWidgetGeometry";
+import { calculateInlineAvailableWidth, createInlineHorizontalGeometryKey } from "./InlineWidgetGeometry";
 
 interface BlockRenderTarget {
     from: number;
@@ -80,6 +80,11 @@ interface VisibleWidgetState {
     signature: string;
 }
 
+interface HorizontalGeometrySnapshot {
+    contentRect: DOMRect;
+    key: string;
+}
+
 interface RevealedInlineReferenceState {
     from: number;
     to: number;
@@ -103,7 +108,7 @@ const EMBED_PLACEHOLDER_MAX_LINES = 10;
 const INLINE_WIDGET_ACTIVATION_MARGIN_LINES = 12;
 const INLINE_WIDGET_RETENTION_MARGIN_LINES = 96;
 const EMBED_WIDGET_SCAN_MARGIN_LINES = 12;
-const MAX_INLINE_WIDGETS_PER_SCAN = 12;
+const MAX_INLINE_WIDGETS_PER_BATCH = 12;
 const MAX_CONCURRENT_EMBED_RENDERS = 2;
 const INLINE_WIDGET_WIDTH_SAFETY_PX = 16;
 
@@ -289,6 +294,10 @@ export function createAsyncBlockRendererPlugin(plugin: BlockReferenceEnhancer) {
             private documentScanVersion = 0;
             private pendingEmbedRenderQueue: BlockRenderTarget[] = [];
             private runningEmbedRenderCount = 0;
+            private pendingInlineRenderQueue: BlockRenderTarget[] = [];
+            private inlineRenderBatchTimer: number | null = null;
+            private inlineRenderGeneration = 0;
+            private horizontalGeometryKey = "";
             private visibleWidgetStates: Map<string, VisibleWidgetState> = new Map();
             private indexUpdatedRef: EventRef;
             private propertySettingsChangedRef: EventRef;
@@ -297,10 +306,12 @@ export function createAsyncBlockRendererPlugin(plugin: BlockReferenceEnhancer) {
                 this.component = new Component();
                 plugin.addChild(this.component);
                 this.indexUpdatedRef = plugin.indexService.on("index-updated", () => {
+                    this.cancelPendingInlineRenderQueue();
                     this.lastScanFingerprint = "";
                     this.scheduleScan(LIVE_PREVIEW_VIEWPORT_SCAN_DEBOUNCE_MS);
                 });
                 this.propertySettingsChangedRef = plugin.onLogseqPropertySettingsChanged(() => {
+                    this.cancelPendingInlineRenderQueue();
                     this.lastScanFingerprint = "";
                     this.scheduleScan(LIVE_PREVIEW_VIEWPORT_SCAN_DEBOUNCE_MS);
                 });
@@ -323,9 +334,11 @@ export function createAsyncBlockRendererPlugin(plugin: BlockReferenceEnhancer) {
                 }
 
                 if (update.docChanged) {
+                    this.cancelPendingInlineRenderQueue();
                     this.cachedTargetsDirty = true;
                     this.documentScanVersion += 1;
                     this.inlineEmbedWidthCache.clear();
+                    this.listEmbedLayoutCache.clear();
                     this.scheduleScan(LIVE_PREVIEW_DOC_SCAN_DEBOUNCE_MS);
                     return;
                 }
@@ -338,22 +351,22 @@ export function createAsyncBlockRendererPlugin(plugin: BlockReferenceEnhancer) {
                     return;
                 }
 
-                if (update.geometryChanged) {
-                    this.inlineEmbedWidthCache.clear();
-                    this.listEmbedLayoutCache.clear();
-                    this.lastScanFingerprint = "";
-                }
-
                 if (update.viewportChanged || update.geometryChanged || update.focusChanged) {
+                    if (update.viewportChanged || update.focusChanged) {
+                        this.cancelPendingInlineRenderQueue();
+                    }
                     this.scheduleScan(LIVE_PREVIEW_VIEWPORT_SCAN_DEBOUNCE_MS);
                     return;
                 }
 
                 if (update.selectionSet && (
-                    this.revealedEmbedPos !== null
+                    this.pendingInlineRenderQueue.length > 0
+                    || this.inlineRenderBatchTimer !== null
+                    || this.revealedEmbedPos !== null
                     || this.revealedInlineReferences.size > 0
                     || this.selectionTouchesRenderedTarget()
                 )) {
+                    this.cancelPendingInlineRenderQueue();
                     this.scheduleScan(LIVE_PREVIEW_VIEWPORT_SCAN_DEBOUNCE_MS);
                 }
             }
@@ -375,6 +388,7 @@ export function createAsyncBlockRendererPlugin(plugin: BlockReferenceEnhancer) {
                 if (this.postRenderRescanTimer !== null) {
                     this.getViewWindow().clearTimeout(this.postRenderRescanTimer);
                 }
+                this.cancelPendingInlineRenderQueue();
                 this.component.unload();
                 this.runningRenders.forEach(({ controller }) => controller.abort());
                 plugin.indexService.offref(this.indexUpdatedRef);
@@ -422,6 +436,30 @@ export function createAsyncBlockRendererPlugin(plugin: BlockReferenceEnhancer) {
                     this.postRenderRescanTimer = null;
                     this.scanAndRender();
                 }, LIVE_PREVIEW_INTERNAL_LAYOUT_RESCAN_DEBOUNCE_MS);
+            }
+
+            private cancelPendingInlineRenderQueue() {
+                this.inlineRenderGeneration += 1;
+                this.pendingInlineRenderQueue = [];
+                if (this.inlineRenderBatchTimer !== null) {
+                    this.getViewWindow().clearTimeout(this.inlineRenderBatchTimer);
+                    this.inlineRenderBatchTimer = null;
+                }
+            }
+
+            private scheduleInlineRenderBatch(generation: number) {
+                if (this.inlineRenderBatchTimer !== null || this.pendingInlineRenderQueue.length === 0) {
+                    return;
+                }
+
+                this.inlineRenderBatchTimer = this.getViewWindow().setTimeout(() => {
+                    this.inlineRenderBatchTimer = null;
+                    if (generation !== this.inlineRenderGeneration) {
+                        return;
+                    }
+
+                    this.renderNextInlineBatch(generation);
+                }, 16);
             }
 
             private classifyInternalWidgetUpdate(update: ViewUpdate): "none" | "inline-only" | "layout" {
@@ -530,6 +568,36 @@ export function createAsyncBlockRendererPlugin(plugin: BlockReferenceEnhancer) {
                 return this.estimateEmbedPlaceholderHeight(target.uuid);
             }
 
+            private captureHorizontalGeometry(): HorizontalGeometrySnapshot | null {
+                const contentRect = this.view.contentDOM.getBoundingClientRect();
+                if (contentRect.width <= 0) {
+                    return null;
+                }
+
+                const sampleLine = this.view.contentDOM.querySelector<HTMLElement>(".cm-line");
+                const lineRect = sampleLine?.getBoundingClientRect();
+                const style = this.getViewWindow().getComputedStyle(this.view.contentDOM);
+                const key = createInlineHorizontalGeometryKey({
+                    contentLeftPx: contentRect.left,
+                    contentRightPx: contentRect.right,
+                    lineLeftPx: lineRect?.left,
+                    lineRightPx: lineRect?.right,
+                    fontFamily: style.fontFamily,
+                    fontSize: style.fontSize,
+                    lineHeight: style.lineHeight,
+                    listIndent: style.getPropertyValue("--list-indent").trim(),
+                    fileLineWidth: style.getPropertyValue("--file-line-width").trim(),
+                });
+
+                if (this.horizontalGeometryKey && this.horizontalGeometryKey !== key) {
+                    this.inlineEmbedWidthCache.clear();
+                    this.listEmbedLayoutCache.clear();
+                }
+                this.horizontalGeometryKey = key;
+
+                return { contentRect, key };
+            }
+
             private measureListEmbedLayout(target: BlockRenderTarget): ListEmbedLayout | null {
                 const lineStartCoords = this.view.coordsAtPos(target.from);
                 const markerCoords = target.listMarkerPos !== undefined ? this.view.coordsAtPos(target.listMarkerPos) : null;
@@ -553,19 +621,26 @@ export function createAsyncBlockRendererPlugin(plugin: BlockReferenceEnhancer) {
                 };
             }
 
-            private measureInlineWidgetWidth(target: BlockRenderTarget): InlineEmbedWidthGeometry | null {
-                const contentRect = this.view.contentDOM.getBoundingClientRect();
-                if (contentRect.width <= 0) {
+            private measureInlineWidgetWidth(
+                target: BlockRenderTarget,
+                geometry: HorizontalGeometrySnapshot | null,
+            ): InlineEmbedWidthGeometry | null {
+                const refId = getTargetRefId(target);
+                const cachedWidth = this.inlineEmbedWidthCache.get(refId);
+                if (cachedWidth) {
+                    return cachedWidth;
+                }
+
+                if (!geometry) {
                     return null;
                 }
 
-                const refId = getTargetRefId(target);
+                const { contentRect } = geometry;
                 const contentWidthPx = Math.max(Math.floor(contentRect.width / 4) * 4, 0);
-                const cachedWidth = this.inlineEmbedWidthCache.get(refId);
                 const anchorCoords = this.view.coordsAtPos(target.from);
                 const lineElement = this.findLineElementAtPos(target.from);
                 if (!anchorCoords || !lineElement) {
-                    return cachedWidth?.contentWidthPx === contentWidthPx ? cachedWidth : null;
+                    return null;
                 }
 
                 // Some themes keep cm-content full width while centering narrower
@@ -603,13 +678,16 @@ export function createAsyncBlockRendererPlugin(plugin: BlockReferenceEnhancer) {
                 }
             }
 
-            private measureRenderTarget(target: BlockRenderTarget): BlockRenderTarget {
+            private measureRenderTarget(
+                target: BlockRenderTarget,
+                geometry: HorizontalGeometrySnapshot | null,
+            ): BlockRenderTarget {
                 const reservedHeightPx = this.getReservedHeightPx(target);
                 const stale = plugin.indexService.getBlockStatus(target.uuid) === "stale";
 
                 if (target.mode === "inline" || target.preserveListMarker) {
                     const refId = getTargetRefId(target);
-                    const inlineWidth = this.measureInlineWidgetWidth(target);
+                    const inlineWidth = this.measureInlineWidgetWidth(target, geometry);
                     if (inlineWidth) {
                         this.inlineEmbedWidthCache.set(refId, inlineWidth);
                     }
@@ -768,6 +846,55 @@ export function createAsyncBlockRendererPlugin(plugin: BlockReferenceEnhancer) {
 
                     return left.from - right.from;
                 });
+            }
+
+            private createInlineRenderEffect(target: BlockRenderTarget) {
+                const refId = getTargetRefId(target);
+                const inlineInfo = plugin.getInlineReferenceInfo(target.uuid);
+                return setRenderedWidgetEffect.of({
+                    from: target.from,
+                    to: target.to,
+                    content: inlineInfo.text ?? t('render.missingBlockBracketed'),
+                    mode: "inline",
+                    interaction: {
+                        from: target.from,
+                        to: target.to,
+                        revealPos: target.from,
+                        stale: inlineInfo.stale,
+                        availableInlineWidthPx: target.availableInlineWidthPx,
+                        refId,
+                        sourceBlockId: target.uuid,
+                        signature: buildTargetSignature(target),
+                    },
+                });
+            }
+
+            private renderNextInlineBatch(generation: number) {
+                if (generation !== this.inlineRenderGeneration || this.pendingInlineRenderQueue.length === 0) {
+                    return;
+                }
+
+                const batch = this.pendingInlineRenderQueue.splice(0, MAX_INLINE_WIDGETS_PER_BATCH);
+                const effects: Array<ReturnType<typeof setRenderedWidgetEffect.of>> = [];
+                for (const target of batch) {
+                    const refId = getTargetRefId(target);
+                    const signature = buildTargetSignature(target);
+                    if (this.visibleWidgetStates.get(refId)?.signature === signature) {
+                        continue;
+                    }
+
+                    effects.push(this.createInlineRenderEffect(target));
+                    this.visibleWidgetStates.set(refId, {
+                        from: target.from,
+                        to: target.to,
+                        signature,
+                    });
+                }
+
+                if (effects.length > 0) {
+                    this.view.dispatch({ effects });
+                }
+                this.scheduleInlineRenderBatch(generation);
             }
 
             private pumpEmbedRenderQueue() {
@@ -967,6 +1094,7 @@ export function createAsyncBlockRendererPlugin(plugin: BlockReferenceEnhancer) {
 
             scanAndRender() {
                 this.ensureTargetsUpToDate();
+                const horizontalGeometry = this.captureHorizontalGeometry();
                 const inlineActivationRanges = this.getVisibleLineRanges(INLINE_WIDGET_ACTIVATION_MARGIN_LINES);
                 const inlineRetentionRanges = this.getVisibleLineRanges(INLINE_WIDGET_RETENTION_MARGIN_LINES);
                 const embedVisibleRanges = this.getVisibleLineRanges(EMBED_WIDGET_SCAN_MARGIN_LINES);
@@ -976,7 +1104,6 @@ export function createAsyncBlockRendererPlugin(plugin: BlockReferenceEnhancer) {
                 const revealedInlineFingerprint = Array.from(this.revealedInlineReferences.keys())
                     .sort()
                     .join("|");
-                const contentWidth = Math.round(this.view.contentDOM.getBoundingClientRect().width);
                 const scanFingerprint = [
                     this.documentScanVersion,
                     inlineActivationRanges.map((range) => `${range.fromLine}-${range.toLine}`).join("|"),
@@ -984,7 +1111,7 @@ export function createAsyncBlockRendererPlugin(plugin: BlockReferenceEnhancer) {
                     this.revealedEmbedPos ?? -1,
                     revealedInlineFingerprint,
                     this.view.hasFocus ? 1 : 0,
-                    contentWidth,
+                    horizontalGeometry?.key ?? "no-horizontal-geometry",
                     plugin.indexService.getIndexRevision(),
                     plugin.getLogseqPropertySettingsRevision(),
                 ].join(":");
@@ -994,6 +1121,8 @@ export function createAsyncBlockRendererPlugin(plugin: BlockReferenceEnhancer) {
                 }
 
                 this.lastScanFingerprint = scanFingerprint;
+                this.cancelPendingInlineRenderQueue();
+                const inlineRenderGeneration = this.inlineRenderGeneration;
                 this.syncRevealedEmbedTarget(this.cachedTargets);
                 const indexRevision = plugin.indexService.getIndexRevision();
                 const propertySettingsRevision = plugin.getLogseqPropertySettingsRevision();
@@ -1012,7 +1141,7 @@ export function createAsyncBlockRendererPlugin(plugin: BlockReferenceEnhancer) {
                     }
 
                     const measuredTarget = {
-                        ...this.measureRenderTarget(target),
+                        ...this.measureRenderTarget(target, horizontalGeometry),
                         indexRevision,
                         propertySettingsRevision,
                     };
@@ -1111,28 +1240,12 @@ export function createAsyncBlockRendererPlugin(plugin: BlockReferenceEnhancer) {
                 }
 
                 const prioritizedInlineTargets = this.sortInlineTargetsByViewportPriority(inlineTargetsToRender);
-                const inlineTargetsForThisPass = prioritizedInlineTargets.slice(0, MAX_INLINE_WIDGETS_PER_SCAN);
-                const hasRemainingInlineTargets = prioritizedInlineTargets.length > inlineTargetsForThisPass.length;
+                const inlineTargetsForThisPass = prioritizedInlineTargets.slice(0, MAX_INLINE_WIDGETS_PER_BATCH);
+                this.pendingInlineRenderQueue = prioritizedInlineTargets.slice(inlineTargetsForThisPass.length);
 
                 for (const target of inlineTargetsForThisPass) {
                     const refId = getTargetRefId(target);
-                    const inlineInfo = plugin.getInlineReferenceInfo(target.uuid);
-                    inlineRenderEffects.push(setRenderedWidgetEffect.of({
-                        from: target.from,
-                        to: target.to,
-                        content: inlineInfo.text ?? t('render.missingBlockBracketed'),
-                        mode: "inline",
-                        interaction: {
-                            from: target.from,
-                            to: target.to,
-                            revealPos: target.from,
-                            stale: inlineInfo.stale,
-                            availableInlineWidthPx: target.availableInlineWidthPx,
-                            refId,
-                            sourceBlockId: target.uuid,
-                            signature: buildTargetSignature(target),
-                        },
-                    }));
+                    inlineRenderEffects.push(this.createInlineRenderEffect(target));
                     nextVisibleWidgetStates.set(refId, {
                         from: target.from,
                         to: target.to,
@@ -1152,11 +1265,7 @@ export function createAsyncBlockRendererPlugin(plugin: BlockReferenceEnhancer) {
 
                 this.visibleWidgetStates = nextVisibleWidgetStates;
                 this.pumpEmbedRenderQueue();
-
-                if (hasRemainingInlineTargets) {
-                    this.lastScanFingerprint = "";
-                    this.scheduleScan(16);
-                }
+                this.scheduleInlineRenderBatch(inlineRenderGeneration);
             }
 
             async triggerRender(target: BlockRenderTarget) {
