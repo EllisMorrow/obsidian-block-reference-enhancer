@@ -48,7 +48,7 @@ export const EN_MESSAGES = {
 	'render.referenceDepthLimit': '[Reference depth limit]',
 	'render.embedDepthLimit': '[Embed depth limit reached]',
 	'render.missingBlockBracketed': '[Missing block]',
-	'render.emptyBlockBracketed': '[empty block]',
+	'render.emptyBlockBracketed': '[Empty source block]',
 	'render.emptyLineBracketed': '[Empty line]',
 	'render.fileNotFoundBracketed': '[File not found]',
 	'render.selectionLimit': 'Converted selection exceeds the {count}-character safety limit.',

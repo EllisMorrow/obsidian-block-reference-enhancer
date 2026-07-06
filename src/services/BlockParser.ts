@@ -1,5 +1,6 @@
 import { BlockCache, BlockReferenceLocation, ParsedMarkdownFile } from '../types';
 import { getOpeningMarkdownFenceState, isClosingMarkdownFence, measureIndentColumns, type MarkdownFenceState } from '../utils/markdownFence';
+import { parseSourceBlockLine } from '../utils/sourceBlockLine';
 
 interface BlockInProgress {
     block: BlockCache;
@@ -16,7 +17,6 @@ const FULLWIDTH_INLINE_BLOCK_REF_REGEX = /（（([A-Za-z0-9_-]{36,})））/y;
  */
 export class BlockParser {
     private readonly PAGE_PROPS_REGEX = /^\s*[^-\s].*?::\s*.*$/;
-    private readonly BLOCK_CONTENT_REGEX = /^(\s*)-\s(.+)/;
     private readonly BLOCK_ID_REGEX = /^\s*id::\s*([a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12})/;
     private readonly BLOCK_PROPS_REGEX = /^\s*([^-\s].*?::\s*.*)$/;
 
@@ -59,10 +59,10 @@ export class BlockParser {
                 inPageProperties = false;
             }
 
-            const blockMatch = line.match(this.BLOCK_CONTENT_REGEX);
-            if (blockMatch) {
-                const indentation = measureIndentColumns(blockMatch[1]);
-                const rawContent = blockMatch[2];
+            const blockLine = parseSourceBlockLine(line);
+            if (blockLine) {
+                const indentation = measureIndentColumns(blockLine.leadingWhitespace);
+                const rawContent = blockLine.content;
 
                 const newBlock: BlockInProgress = {
                     block: {
@@ -278,9 +278,10 @@ export class BlockParser {
         lineNumber: number,
         parentStack: BlockInProgress[]
     ) {
-        blockInProgress.block.rawContent = blockInProgress.block.rawContent
-            ? `${blockInProgress.block.rawContent}\n${line}`
-            : line;
+        // Keep the first logical line reserved for the list-item title. For an
+        // empty source block this intentionally creates a leading newline, so
+        // continuation content cannot become the block reference summary.
+        blockInProgress.block.rawContent = `${blockInProgress.block.rawContent}\n${line}`;
         blockInProgress.block.endLine = lineNumber;
 
         for (let index = 0; index < parentStack.length - 1; index++) {

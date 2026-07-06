@@ -78,6 +78,16 @@ You get:
   id:: 68a92328-da50-46cc-aa45-73dec00ca8ce
 ```
 
+Empty list items can also be source blocks. Their inline reference summary is shown as `[Empty source block]` while embeds can still render their continuation text and children:
+
+```md
+-
+  id:: 699c3044-2c70-4199-9115-de5460941dd5
+  > Continuation content remains part of the embed.
+```
+
+IDs created by the plugin use the list item's existing leading indentation plus two spaces. Nested list levels are left unchanged. Older notes whose `id::` lines use wider indentation remain supported and are not rewritten.
+
 ### Inline block reference
 
 ```md
@@ -349,8 +359,10 @@ If you changed many files through Logseq, sync tools, git, or external editors w
 The plugin is intentionally strict about what counts as a source block.
 
 A block is indexed as a source block when:
-- the source line starts with an outline list marker such as `- `
+- the source line starts with an outline list marker such as `- `; an empty `- ` or bare `-` is also valid
 - the block has an indented property line containing `id:: uuid`
+
+The `id::` line may use the current two-space continuation style or wider legacy indentation. When the plugin creates a new ID, it writes exactly two spaces after the list item's existing leading indentation.
 
 This strictness is deliberate. It keeps UUID-based outline notes predictable and prevents loose Markdown from being indexed as the wrong block.
 

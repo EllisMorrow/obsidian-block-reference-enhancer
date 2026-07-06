@@ -46,7 +46,7 @@ export const ZH_CN_MESSAGES: Record<TranslationKey, string> = {
 	'render.referenceDepthLimit': '[已达到引用深度限制]',
 	'render.embedDepthLimit': '[已达到嵌入深度限制]',
 	'render.missingBlockBracketed': '[源块缺失]',
-	'render.emptyBlockBracketed': '[空块]',
+	'render.emptyBlockBracketed': '[块源为空]',
 	'render.emptyLineBracketed': '[空行]',
 	'render.fileNotFoundBracketed': '[文件未找到]',
 	'render.selectionLimit': '转换后的框选内容超过 {count} 个字符的安全限制。',

@@ -33,6 +33,7 @@ import { DualPropertySyncService } from './services/DualPropertySyncService';
 import { DEFAULT_DUAL_PROPERTY_WHITELIST } from './dual-property-sync/rules';
 import type { PersistedDualPropertySyncState } from './dual-property-sync/types';
 import { initializeI18n, t } from './i18n';
+import { buildSourceBlockIdInsertion, parseSourceBlockLine } from './utils/sourceBlockLine';
 
 export interface BlockReferenceEnhancerSettings {
 	hideLogseqProperties: boolean;
@@ -158,8 +159,6 @@ export default class BlockReferenceEnhancer extends Plugin {
 	private hiddenLogseqPropertyMatcher: HiddenLogseqPropertyMatcher = buildHiddenLogseqPropertyMatcher(DEFAULT_HIDDEN_LOGSEQ_PROPERTY_KEYS);
 	private logseqPropertySettingsRevision = 0;
 	private readonly logseqPropertyEvents = new Events();
-
-	private static readonly SOURCE_BLOCK_PATTERN = /^\s*-\s(.+)/;
 
 	setEditorContextMenuTarget(target: EditorContextMenuTarget) {
 		this.editorContextMenuTarget = target;
@@ -725,7 +724,7 @@ export default class BlockReferenceEnhancer extends Plugin {
 
 	private isCurrentLineSourceBlock(editor: Editor, targetLine = editor.getCursor().line): boolean {
 		const lineContent = editor.getLine(targetLine);
-		return BlockReferenceEnhancer.SOURCE_BLOCK_PATTERN.test(lineContent);
+		return parseSourceBlockLine(lineContent) !== null;
 	}
 
 	private measureIndentColumns(value: string): number {
@@ -754,7 +753,7 @@ export default class BlockReferenceEnhancer extends Plugin {
 				break;
 			}
 
-			if (BlockReferenceEnhancer.SOURCE_BLOCK_PATTERN.test(lineContent)) {
+			if (parseSourceBlockLine(lineContent)) {
 				break;
 			}
 
@@ -774,8 +773,8 @@ export default class BlockReferenceEnhancer extends Plugin {
 		const line = targetLine;
 		const lineContent = editor.getLine(line);
 
-		const blockMatch = lineContent.match(BlockReferenceEnhancer.SOURCE_BLOCK_PATTERN);
-		if (!blockMatch) {
+		const blockLine = parseSourceBlockLine(lineContent);
+		if (!blockLine) {
 			new Notice(t('notice.invalidSourceLine'));
 			return null;
 		}
@@ -793,9 +792,10 @@ export default class BlockReferenceEnhancer extends Plugin {
 		}
 
 		const blockId = crypto.randomUUID();
-		const indentationMatch = lineContent.match(/^(\s*)/);
-		const indentation = indentationMatch ? indentationMatch[1] : '';
-		const idLine = `\n${indentation}  id:: ${blockId}`;
+		const idLine = buildSourceBlockIdInsertion(lineContent, blockId);
+		if (!idLine) {
+			return null;
+		}
 
 		editor.replaceRange(idLine, { line: line, ch: lineContent.length });
 
@@ -820,14 +820,14 @@ export default class BlockReferenceEnhancer extends Plugin {
 		}
 
 		const lineContent = editor.getLine(line);
-		const blockMatch = lineContent.match(BlockReferenceEnhancer.SOURCE_BLOCK_PATTERN);
-		if (!blockMatch) {
+		const blockLine = parseSourceBlockLine(lineContent);
+		if (!blockLine) {
 			return;
 		}
 
 		this.indexService.addBlock(blockId, {
 			filePath: file.path,
-			rawContent: blockMatch[1],
+			rawContent: blockLine.content,
 			childrenMarkdown: '',
 			startLine: line,
 			endLine: line,

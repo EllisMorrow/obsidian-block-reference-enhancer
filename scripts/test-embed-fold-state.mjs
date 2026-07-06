@@ -32,7 +32,7 @@ const lines = [
 	"const longLine = 'This source block first line is intentionally longer than sixty characters so it must remain complete in every inline reference.';",
 	"assert.equal(createInlineReferenceSummary(longLine), longLine, 'inline summaries must not truncate long first lines');",
 	"assert.equal(createInlineReferenceSummary('## **Visible** [[Target|label]]'), 'Visible label', 'inline summaries should keep the existing Markdown cleanup behavior');",
-	"assert.equal(createInlineReferenceSummary('   '), '[empty block]');",
+	"assert.equal(createInlineReferenceSummary('   '), '[Empty source block]');",
 	'',
 	"console.log('Embed fold state and inline summary tests passed.');",
 ];
