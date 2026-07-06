@@ -857,3 +857,6 @@
 .block-reference-dual-property-cancel {
 	margin-inline-start: var(--size-4-2);
 }
+.block-reference-index-status.block-reference-index-status-hidden {
+	display: none;
+}

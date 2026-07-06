@@ -31,6 +31,23 @@ export class BlockReferenceEnhancerSettingTab extends PluginSettingTab {
 		const doc = getDocument(containerEl);
 
 		new Setting(containerEl)
+			.setName(t('settings.general.heading'))
+			.setHeading();
+
+		new Setting(containerEl)
+			.setName(t('settings.showIndexStatus.name'))
+			.setDesc(t('settings.showIndexStatus.desc'))
+			.addToggle((toggle) => {
+				toggle
+					.setValue(this.plugin.settings.showBlockIndexStatus)
+					.onChange(async (value) => {
+						this.plugin.settings.showBlockIndexStatus = value;
+						this.plugin.updateStatusBarVisibility();
+						await this.plugin.saveSettings(false);
+					});
+			});
+
+		new Setting(containerEl)
 			.setName(t('settings.propertyHiding.heading'))
 			.setHeading();
 
@@ -76,7 +93,7 @@ export class BlockReferenceEnhancerSettingTab extends PluginSettingTab {
 			});
 
 		new Setting(containerEl)
-			.setName(t('settings.experimental.heading'))
+			.setName(t('settings.outlineEnhancements.heading'))
 			.setHeading();
 
 		new Setting(containerEl)

@@ -36,6 +36,7 @@ import { initializeI18n, t } from './i18n';
 import { buildSourceBlockIdInsertion, parseSourceBlockLine } from './utils/sourceBlockLine';
 
 export interface BlockReferenceEnhancerSettings {
+	showBlockIndexStatus: boolean;
 	hideLogseqProperties: boolean;
 	hiddenLogseqPropertyKeys: string;
 	enablePasteClipboardAsOutline: boolean;
@@ -52,6 +53,7 @@ interface BlockReferenceEnhancerPersistedData {
 }
 
 const DEFAULT_SETTINGS: BlockReferenceEnhancerSettings = {
+	showBlockIndexStatus: true,
 	hideLogseqProperties: true,
 	hiddenLogseqPropertyKeys: DEFAULT_HIDDEN_LOGSEQ_PROPERTY_KEYS,
 	enablePasteClipboardAsOutline: false,
@@ -236,6 +238,8 @@ export default class BlockReferenceEnhancer extends Plugin {
 		});
 		this.sourceReferencePopover = new SourceReferencePopover(this);
 		this.statusBarEl = this.addStatusBarItem();
+		this.statusBarEl.addClass('block-reference-index-status');
+		this.updateStatusBarVisibility();
 		this.setIndexStatusMessage(t('index.status.loadingCache'));
 
 		this.addCommand({
@@ -511,6 +515,16 @@ export default class BlockReferenceEnhancer extends Plugin {
 			this.logseqPropertyEvents.trigger('changed');
 			this.refreshOpenMarkdownViews();
 		}
+	}
+
+	updateStatusBarVisibility() {
+		if (!this.statusBarEl) {
+			return;
+		}
+
+		const shouldHide = !this.settings.showBlockIndexStatus;
+		this.statusBarEl.hidden = shouldHide;
+		this.statusBarEl.toggleClass('block-reference-index-status-hidden', shouldHide);
 	}
 
 	private isPersistedData(value: unknown): value is BlockReferenceEnhancerPersistedData {

@@ -38,7 +38,7 @@ You get:
 - Commands and editor context menu actions to copy the current block reference or block embed
 - A selection context-menu action that copies rendered UUID references and embeds as readable Markdown outline text
 - Hidden Logseq-style outline property lines such as `id::`, `collapsed::`, and `hl-*::`
-- Experimental right-click outline paste for unordered-list blocks
+- Right-click outline enhancements for unordered-list blocks
 - Experimental whitelist-based synchronization between Logseq page properties and Obsidian YAML frontmatter
 - Saved source-block edits automatically refresh existing references and embeds
 - Dense pages reuse layout measurements and continue rendering through a bounded queue, avoiding repeated full-page scans during scrolling and tab switches
@@ -237,10 +237,10 @@ When this option is enabled, pressing `Enter` on a non-empty outline block in Li
 
 In both cases, hidden property lines and continuation lines stay attached to the original parent block instead of being migrated into the new block.
 
-## 🧪 Experimental Outline Paste
+## 🧩 Outline Enhancements
 
-The plugin also includes an experimental setting:
-- `Settings -> Community plugins -> Block Reference Enhancer -> Experimental -> Convert pasted content to outline`
+The plugin also includes an outline enhancement setting:
+- `Settings -> Community plugins -> Block Reference Enhancer -> Outline enhancements -> Convert pasted content to outline`
 
 It is off by default.
 
@@ -319,7 +319,7 @@ This experimental feature modifies Markdown source. Back up the vault before the
 
 The plugin builds and maintains its own block index. This is separate from Obsidian's built-in search index.
 
-On first launch, watch the status bar for `Block index: ...`.
+On first launch, watch the bottom-right status bar for `Block index: ...`. The `General -> Show block index status` setting controls this display and is enabled by default; hiding it does not stop indexing.
 
 Common states:
 - `loading cache...` means the plugin is reading its local cache.
