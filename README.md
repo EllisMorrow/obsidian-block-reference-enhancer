@@ -2,27 +2,21 @@
 
 简体中文版文档见 [README.zh-CN.md](https://github.com/msjsc001/obsidian-block-reference-enhancer/blob/main/README.zh-CN.md)。
 
-The plugin supports low-granularity block references and block embeds inside Obsidian, and it also makes UUID-based block references and block embeds readable, clickable, and usable in Obsidian, while staying compatible with Logseq-style block reference and block embed syntax for rendering and use.
+Render, navigate, and manage Logseq-style UUID block references and embeds directly in Obsidian, while preserving the original Markdown.
 
-<img alt="ChatGPT Image 2026年7月4日 13_39_35" src="https://github.com/user-attachments/assets/63b9abef-1726-47d3-891a-3b01f21a28e3" />
+<img alt="Block Reference Enhancer overview" src="https://github.com/user-attachments/assets/63b9abef-1726-47d3-891a-3b01f21a28e3" />
 
-It is a display enhancer and renderer, and it also builds a local block index and automatically tracks additions, removals, and changes for block references and block embeds:
-- `((uuid))` is shown as the complete first-line summary of its source block.
-- `{{embed ((uuid))}}` is shown as a full block embed with children and foldable outline nodes.
-- Original Markdown is not rewritten.
-- The plugin maintains its own local block index instead of relying on Obsidian search indexing.
+<p align="center">
+  <a href="https://github.com/msjsc001/obsidian-block-reference-enhancer/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/msjsc001/obsidian-block-reference-enhancer?style=flat-square&label=version&color=7c3aed" /></a>
+  <a href="https://community.obsidian.md/plugins/block-reference-enhancer"><img alt="Obsidian downloads" src="https://img.shields.io/badge/dynamic/json?style=flat-square&logo=obsidian&color=7c3aed&label=Obsidian%20downloads&query=%24%5B%22block-reference-enhancer%22%5D.downloads&url=https%3A%2F%2Fraw.githubusercontent.com%2Fobsidianmd%2Fobsidian-releases%2Fmaster%2Fcommunity-plugin-stats.json" /></a>
+  <a href="https://github.com/msjsc001/obsidian-block-reference-enhancer/commits/main"><img alt="Last commit" src="https://img.shields.io/github/last-commit/msjsc001/obsidian-block-reference-enhancer/main?style=flat-square&label=updated&color=0969da" /></a>
+  <a href="https://github.com/msjsc001/obsidian-block-reference-enhancer/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/msjsc001/obsidian-block-reference-enhancer?style=flat-square&color=f5a623" /></a>
+  <a href="./LICENSE"><img alt="MIT license" src="https://img.shields.io/github/license/msjsc001/obsidian-block-reference-enhancer?style=flat-square&color=2da44e" /></a>
+</p>
 
-> [!NOTE]
-> Plugin display name: `Block Reference Enhancer`  
-> Plugin ID and install folder: `block-reference-enhancer`  
-> The GitHub repository keeps the `obsidian-` prefix only as a repository name.<br>
-> The Obsidian default theme and Minimal are the recommended themes and actively maintained compatibility baselines for this plugin. Other themes are not guaranteed to render or behave correctly.
+The plugin renders `((uuid))` as readable summaries and `{{embed ((uuid))}}` as complete, foldable outlines. A local index tracks source blocks and references without depending on Obsidian's search index.
 
-<img alt="演示-20260702001852" src="https://github.com/user-attachments/assets/335cb127-b120-44fa-b23b-267ec4962072" />
-
-### Interface languages
-
-The plugin follows Obsidian's interface language automatically. English and Simplified Chinese are included. Chinese locales, including `zh-TW`, use the Simplified Chinese interface; unsupported languages fall back to English.
+<img alt="Block reference and embed demonstration" src="https://github.com/user-attachments/assets/335cb127-b120-44fa-b23b-267ec4962072" />
 
 ## ✨ What It Does
 
@@ -68,6 +62,15 @@ You get:
 4. Create a folder named `block-reference-enhancer`.
 5. Copy the three files into that folder.
 6. Enable `Block Reference Enhancer` in Obsidian.
+
+### Compatibility and interface languages
+
+> [!NOTE]
+> Plugin ID and install folder: `block-reference-enhancer`<br>
+> The GitHub repository keeps the `obsidian-` prefix only as a repository name.<br>
+> The Obsidian default theme and Minimal are the actively maintained compatibility baselines. Other themes are not guaranteed to render or behave correctly.
+
+The plugin follows Obsidian's interface language automatically. English and Simplified Chinese are included. Chinese locales, including `zh-TW`, use the Simplified Chinese interface; unsupported languages fall back to English.
 
 ## 📝 Raw Syntax Used in Notes
 

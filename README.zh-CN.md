@@ -2,28 +2,21 @@
 
 English documentation is available in [README.md](./README.md).
 
-插件支持 Obsidian 使用低粒度的块引用块嵌入，也能把基于 UUID 的块引用、块嵌入，在 Obsidian 里变得清楚、可读、可点开、可继续使用，同时兼容 Logseq 块引用、块嵌入语法风格在 Obsidian 渲染与使用。
+在 Obsidian 中直接渲染、跳转和管理 Logseq 风格的 UUID 块引用与块嵌入，同时保留原始 Markdown。
 
-<img alt="ChatGPT Image 2026年7月4日 13_39_35" src="https://github.com/user-attachments/assets/c204ef39-3c4f-4280-8443-8ba05e6ca3f6" />
+<img alt="Block Reference Enhancer 功能概览" src="https://github.com/user-attachments/assets/c204ef39-3c4f-4280-8443-8ba05e6ca3f6" />
 
+<p align="center">
+  <a href="https://github.com/msjsc001/obsidian-block-reference-enhancer/releases/latest"><img alt="最新版本" src="https://img.shields.io/github/v/release/msjsc001/obsidian-block-reference-enhancer?style=flat-square&label=version&color=7c3aed" /></a>
+  <a href="https://community.obsidian.md/plugins/block-reference-enhancer"><img alt="Obsidian 下载量" src="https://img.shields.io/badge/dynamic/json?style=flat-square&logo=obsidian&color=7c3aed&label=Obsidian%20downloads&query=%24%5B%22block-reference-enhancer%22%5D.downloads&url=https%3A%2F%2Fraw.githubusercontent.com%2Fobsidianmd%2Fobsidian-releases%2Fmaster%2Fcommunity-plugin-stats.json" /></a>
+  <a href="https://github.com/msjsc001/obsidian-block-reference-enhancer/commits/main"><img alt="最后提交日期" src="https://img.shields.io/github/last-commit/msjsc001/obsidian-block-reference-enhancer/main?style=flat-square&label=updated&color=0969da" /></a>
+  <a href="https://github.com/msjsc001/obsidian-block-reference-enhancer/stargazers"><img alt="GitHub Stars" src="https://img.shields.io/github/stars/msjsc001/obsidian-block-reference-enhancer?style=flat-square&color=f5a623" /></a>
+  <a href="./LICENSE"><img alt="MIT 许可证" src="https://img.shields.io/github/license/msjsc001/obsidian-block-reference-enhancer?style=flat-square&color=2da44e" /></a>
+</p>
 
-它是一个“显示增强器”和“渲染器”（同时它也能建立和自动检测块引用块嵌入的增删）：
-- `((uuid))` 会显示源块完整的第一行摘要
-- `{{embed ((uuid))}}` 会显示成完整块嵌入和可折叠的子级大纲
-- 原始 Markdown 不会被改写
-- 插件会维护自己的本地块索引，不依赖 Obsidian 自带搜索索引
+插件会把 `((uuid))` 渲染为可读摘要，把 `{{embed ((uuid))}}` 渲染为完整、可折叠的大纲，并通过独立的本地索引跟踪源块和引用，不依赖 Obsidian 搜索索引。
 
-> [!NOTE]
-> 插件显示名：`Block Reference Enhancer`  
-> 插件 ID 和安装文件夹名：`block-reference-enhancer`  
-> GitHub 仓库保留 `obsidian-` 前缀，仅用于仓库命名，不是插件 ID。<br>
-> 更推荐使用 Obsidian 默认主题或 Minimal；插件会持续维护对这两个主题的兼容性。其他主题不保证能正常显示或正常交互。
-
-<img alt="演示-20260702001852" src="https://github.com/user-attachments/assets/335cb127-b120-44fa-b23b-267ec4962072" />
-
-### 界面语言
-
-插件会自动跟随 Obsidian 的界面语言。内置英文和简体中文；包括 `zh-TW` 在内的中文语言环境统一使用简体中文，其他未支持的语言回退为英文。
+<img alt="块引用与块嵌入演示" src="https://github.com/user-attachments/assets/335cb127-b120-44fa-b23b-267ec4962072" />
 
 ## ✨ 这个插件能做什么
 
@@ -69,6 +62,15 @@ English documentation is available in [README.md](./README.md).
 4. 新建文件夹 `block-reference-enhancer`
 5. 把这三个文件放进去
 6. 回到 Obsidian 启用插件
+
+### 兼容性与界面语言
+
+> [!NOTE]
+> 插件 ID 和安装文件夹名：`block-reference-enhancer`<br>
+> GitHub 仓库保留 `obsidian-` 前缀，仅用于仓库命名，不是插件 ID。<br>
+> Obsidian 默认主题和 Minimal 是插件持续维护的兼容基线；其他主题不保证能正常显示或正常交互。
+
+插件会自动跟随 Obsidian 的界面语言。内置英文和简体中文；包括 `zh-TW` 在内的中文语言环境统一使用简体中文，其他未支持的语言回退为英文。
 
 ## 📝 笔记里的原始语法样式
 
