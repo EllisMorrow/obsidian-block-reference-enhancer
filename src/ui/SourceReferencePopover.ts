@@ -318,7 +318,7 @@ export class SourceReferencePopover {
             });
 
             const locationRow = headerRow.createDiv({ cls: 'block-reference-source-popover-item-location' });
-            const fileNameEl = locationRow.createSpan({
+            locationRow.createSpan({
                 cls: 'block-reference-source-popover-item-file',
                 text: fileName,
             });

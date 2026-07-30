@@ -21,6 +21,8 @@ const lines = [
 	"assert.equal(parsedRules.rules[0].codec, 'aliases');",
 	"assert.match(parseDualPropertyRules('id').errors[0], /protected/);",
 	"assert.match(parseDualPropertyRules('a<->x\\nb<->x').errors[0], /already mapped/);",
+	"assert.match(parseDualPropertyRules('bad[key').errors[0], /cannot contain/);",
+	"assert.match(parseDualPropertyRules('bad]key').errors[0], /cannot contain/);",
 	'',
 	'{',
 	"  const content = ['---', '# keep this comment', 'aliases:', '  - A', 'custom: keep', '---', '', 'alias:: A', 'other:: untouched', '', '- body', '  id:: block-only'].join('\\n');",
