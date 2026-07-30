@@ -1,17 +1,17 @@
 # Block Reference Enhancer
 
-简体中文版文档见 [README.zh-CN.md](https://github.com/msjsc001/obsidian-block-reference-enhancer/blob/main/README.zh-CN.md)。
+简体中文版文档见 [README.zh-CN.md](https://github.com/EllisMorrow/obsidian-block-reference-enhancer/blob/main/README.zh-CN.md)。
 
 Render, navigate, and manage Logseq-style UUID block references and embeds directly in Obsidian, while preserving the original Markdown.
 
 <img alt="Block Reference Enhancer overview" src="https://github.com/user-attachments/assets/63b9abef-1726-47d3-891a-3b01f21a28e3" />
 
 <p align="center">
-  <a href="https://github.com/msjsc001/obsidian-block-reference-enhancer/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/msjsc001/obsidian-block-reference-enhancer?style=flat-square&label=version&color=7c3aed" /></a>
+  <a href="https://github.com/EllisMorrow/obsidian-block-reference-enhancer/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/EllisMorrow/obsidian-block-reference-enhancer?style=flat-square&label=version&color=7c3aed" /></a>
   <a href="https://community.obsidian.md/plugins/block-reference-enhancer"><img alt="Obsidian downloads" src="https://img.shields.io/badge/dynamic/json?style=flat-square&logo=obsidian&color=7c3aed&label=Obsidian%20downloads&query=%24%5B%22block-reference-enhancer%22%5D.downloads&url=https%3A%2F%2Fraw.githubusercontent.com%2Fobsidianmd%2Fobsidian-releases%2Fmaster%2Fcommunity-plugin-stats.json" /></a>
-  <a href="https://github.com/msjsc001/obsidian-block-reference-enhancer/commits/main"><img alt="Last commit" src="https://img.shields.io/github/last-commit/msjsc001/obsidian-block-reference-enhancer/main?style=flat-square&label=updated&color=0969da" /></a>
-  <a href="https://github.com/msjsc001/obsidian-block-reference-enhancer/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/msjsc001/obsidian-block-reference-enhancer?style=flat-square&color=f5a623" /></a>
-  <a href="./LICENSE"><img alt="MIT license" src="https://img.shields.io/github/license/msjsc001/obsidian-block-reference-enhancer?style=flat-square&color=2da44e" /></a>
+  <a href="https://github.com/EllisMorrow/obsidian-block-reference-enhancer/commits/main"><img alt="Last commit" src="https://img.shields.io/github/last-commit/EllisMorrow/obsidian-block-reference-enhancer/main?style=flat-square&label=updated&color=0969da" /></a>
+  <a href="https://github.com/EllisMorrow/obsidian-block-reference-enhancer/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/EllisMorrow/obsidian-block-reference-enhancer?style=flat-square&color=f5a623" /></a>
+  <a href="./LICENSE"><img alt="MIT license" src="https://img.shields.io/github/license/EllisMorrow/obsidian-block-reference-enhancer?style=flat-square&color=2da44e" /></a>
 </p>
 
 The plugin renders `((uuid))` as readable summaries and `{{embed ((uuid))}}` as complete, foldable outlines. A local index tracks source blocks and references without depending on Obsidian's search index.

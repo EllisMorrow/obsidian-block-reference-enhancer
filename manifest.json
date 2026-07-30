@@ -1,10 +1,10 @@
 {
 	"id": "block-reference-enhancer",
 	"name": "Block Reference Enhancer",
-	"version": "1.3.25",
+	"version": "1.3.26",
 	"minAppVersion": "0.15.0",
 	"description": "Render and navigate UUID-based block references and block embeds in Live Preview and Reading Mode, with Logseq-style outlines, property hiding, source badges, backlinks, and local indexing.",
-	"author": "msjsc001",
-	"authorUrl": "https://github.com/msjsc001",
+	"author": "EllisMorrow",
+	"authorUrl": "https://github.com/EllisMorrow",
 	"isDesktopOnly": false
 }
