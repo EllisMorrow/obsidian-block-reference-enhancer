@@ -14,7 +14,7 @@ const PROTECTED_KEYS = new Set([
 	'updated-at',
 ]);
 
-const VALID_KEY_REGEX = /^[^\s:<>{}\[\]]+$/u;
+const VALID_KEY_REGEX = /^[^\s:<>{}[\]]+$/u;
 
 export function parseDualPropertyRules(text: string): DualPropertyRuleParseResult {
 	const rules: DualPropertySyncRule[] = [];
