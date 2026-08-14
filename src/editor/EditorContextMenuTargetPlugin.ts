@@ -3,6 +3,10 @@ import type { Extension } from '@codemirror/state';
 import { EditorView, ViewPlugin } from '@codemirror/view';
 import type BlockReferenceEnhancer from '../main';
 import { isDomNode, isHtmlElement } from '../utils/dom';
+import {
+	registerEditorContextMenuCapture,
+	resolveEditorContextMenuLine,
+} from './EditorContextMenuCapturePolicy';
 
 export interface EditorContextMenuTarget {
 	filePath: string;
@@ -13,81 +17,68 @@ export interface EditorContextMenuTarget {
 export function createEditorContextMenuTargetPlugin(plugin: BlockReferenceEnhancer): Extension {
 	return ViewPlugin.fromClass(
 		class {
-			constructor(readonly view: EditorView) {}
-		},
-		{
-			eventHandlers: {
-				contextmenu(event, view) {
-					const filePath = view.state.field(editorInfoField).file?.path;
-					if (!filePath) {
-						plugin.clearEditorContextMenuTarget();
-						return false;
-					}
+			private readonly unregisterContextMenuCapture: () => void;
 
-					const line = resolveContextMenuLineFromView(view, event);
-					if (line === null) {
-						plugin.clearEditorContextMenuTarget();
-						return false;
-					}
+			constructor(readonly view: EditorView) {
+				this.unregisterContextMenuCapture = registerEditorContextMenuCapture(
+					view.dom,
+					(event) => this.captureContextMenuTarget(event),
+				);
+			}
 
-					plugin.setEditorContextMenuTarget({
-						filePath,
-						line,
-						capturedAt: Date.now(),
-					});
-					return false;
-				},
-			},
+			destroy() {
+				this.unregisterContextMenuCapture();
+			}
+
+			private captureContextMenuTarget(event: MouseEvent) {
+				plugin.clearEditorContextMenuTarget();
+				const filePath = this.view.state.field(editorInfoField).file?.path;
+				if (!filePath) {
+					return;
+				}
+
+				const line = resolveContextMenuLineFromView(this.view, event);
+				if (line === null) {
+					return;
+				}
+
+				plugin.setEditorContextMenuTarget({
+					filePath,
+					line,
+					capturedAt: Date.now(),
+				});
+			}
 		},
 	);
 }
 
 function resolveContextMenuLineFromView(view: EditorView, event: MouseEvent): number | null {
-	const documentLineCount = view.state.doc.lines;
-
-	try {
-		const block = view.lineBlockAtHeight(event.clientY - view.documentTop);
-		const line = view.state.doc.lineAt(block.from).number - 1;
-		if (line >= 0 && line < documentLineCount) {
-			return line;
-		}
-	} catch {
-		// Fall through to the next strategy.
-	}
-
-	try {
-		const position = view.posAtCoords({ x: event.clientX, y: event.clientY }, false);
-		if (typeof position === 'number') {
-			const line = view.state.doc.lineAt(position).number - 1;
-			if (line >= 0 && line < documentLineCount) {
-				return line;
-			}
-		}
-	} catch {
-		// Fall through to the final DOM-based strategy.
-	}
-
-	try {
+	const resolveDomPosition = (): number | null => {
 		const target = event.target;
-		if (!isDomNode(target) || !view.contentDOM.contains(target)) {
+		if (!isDomNode(target) || !view.dom.contains(target)) {
 			return null;
 		}
 
-		const lineElement = isHtmlElement(target)
-			? target.closest('.cm-line')
-			: target.parentElement?.closest('.cm-line');
-		if (!isHtmlElement(lineElement)) {
-			return null;
+		const targetElement = isHtmlElement(target) ? target : target.parentElement;
+		const renderedHost = targetElement?.closest('[data-block-ref-from]');
+		if (isHtmlElement(renderedHost) && view.dom.contains(renderedHost)) {
+			const rawPosition = renderedHost.dataset.blockRefFrom;
+			return rawPosition && rawPosition.trim() ? Number(rawPosition) : null;
 		}
 
-		const position = view.posAtDOM(lineElement, 0);
-		const line = view.state.doc.lineAt(position).number - 1;
-		if (line >= 0 && line < documentLineCount) {
-			return line;
+		const lineElement = targetElement?.closest('.cm-line');
+		if (isHtmlElement(lineElement) && view.contentDOM.contains(lineElement)) {
+			return view.posAtDOM(lineElement, 0);
 		}
-	} catch {
-		// Ignore and return null below.
-	}
 
-	return null;
+		return null;
+	};
+
+	return resolveEditorContextMenuLine(view.state.doc, [
+		resolveDomPosition,
+		// A fold gutter/marker has no cm-line ancestor. Its vertical block is
+		// more reliable than projecting its left-of-content x coordinate.
+		() => view.lineBlockAtHeight(event.clientY - view.documentTop).from,
+		() => view.posAtCoords({ x: event.clientX, y: event.clientY }, false),
+	]);
 }

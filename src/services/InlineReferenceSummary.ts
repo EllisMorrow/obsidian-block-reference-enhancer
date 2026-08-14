@@ -1,7 +1,7 @@
 import { t } from '../i18n';
 
-export function createInlineReferenceSummary(expandedLine: string): string {
-	const plainText = expandedLine
+export function createInlineReferencePlainText(expandedLine: string): string {
+	return expandedLine
 		.replace(/!\[\[([^\]]+)\]\]/g, '$1')
 		.replace(/\[\[([^\]|]+)\|([^\]]+)\]\]/g, '$2')
 		.replace(/\[\[([^\]]+)\]\]/g, '$1')
@@ -10,6 +10,8 @@ export function createInlineReferenceSummary(expandedLine: string): string {
 		.replace(/[*_~`]/g, '')
 		.replace(/\s+/g, ' ')
 		.trim();
+}
 
-	return plainText || t('render.emptyBlockBracketed');
+export function createInlineReferenceSummary(expandedLine: string): string {
+	return createInlineReferencePlainText(expandedLine) || t('render.emptyBlockBracketed');
 }

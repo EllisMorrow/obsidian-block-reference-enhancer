@@ -12,6 +12,8 @@ const projectImport = (relativePath) => JSON.stringify(path.resolve(rootDir, rel
 const lines = [
     "import assert from 'node:assert/strict';",
     `import { calculateInlineAvailableWidth, createInlineHorizontalGeometryKey } from ${projectImport('src/editor/InlineWidgetGeometry.ts')};`,
+    `import { shouldIgnoreBlockReferenceWidgetEvent } from ${projectImport('src/editor/BlockReferenceWidgetEventPolicy.ts')};`,
+    `import { isEmbedRevealControlTarget } from ${projectImport('src/editor/EmbedRevealEventPolicy.ts')};`,
     '',
     'const measure = (overrides = {}) => calculateInlineAvailableWidth({',
     '    contentLeftPx: 100,',
@@ -46,6 +48,13 @@ const lines = [
     "assert.notEqual(createInlineHorizontalGeometryKey({ ...geometryKeyInput, contentRightPx: 1092 }), geometryKey, 'editor width changes must invalidate cached widths');",
     "assert.notEqual(createInlineHorizontalGeometryKey({ ...geometryKeyInput, lineRightPx: 800 }), geometryKey, 'theme line-width changes must invalidate cached widths');",
     "assert.notEqual(createInlineHorizontalGeometryKey({ ...geometryKeyInput, listIndent: '3em' }), geometryKey, 'list indentation changes must invalidate cached widths');",
+    '',
+    "assert.equal(shouldIgnoreBlockReferenceWidgetEvent('inline', 'contextmenu'), false, 'inline widgets must expose right-clicks to the editor target resolver');",
+    "assert.equal(shouldIgnoreBlockReferenceWidgetEvent('embed', 'contextmenu'), false, 'embed widgets must expose right-clicks to the editor target resolver');",
+    "assert.equal(shouldIgnoreBlockReferenceWidgetEvent('embed', 'mousedown'), false, 'embed mousedown must retain source-reveal handling');",
+    "assert.equal(shouldIgnoreBlockReferenceWidgetEvent('inline', 'mousedown'), true, 'inline mousedown must retain the existing widget behavior');",
+    "assert.equal(isEmbedRevealControlTarget({ closest: (selector) => selector.includes('.block-reference-back-button') ? {} : null }), true, 'Back/Delete/Fold controls must never reveal and remove the embed before click');",
+    "assert.equal(isEmbedRevealControlTarget({ closest: () => null }), false, 'ordinary embed content must retain source-reveal behavior');",
     '',
     "console.log('Inline widget geometry tests passed.');",
 ];

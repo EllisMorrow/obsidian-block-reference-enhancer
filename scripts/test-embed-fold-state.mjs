@@ -12,7 +12,7 @@ const projectImport = (relativePath) => JSON.stringify(path.resolve(rootDir, rel
 const lines = [
 	"import assert from 'node:assert/strict';",
 	`import { createEmbedOccurrenceKey, EmbedFoldStateService, parsePersistedEmbedFoldState } from ${projectImport('src/services/EmbedFoldStateService.ts')};`,
-	`import { createInlineReferenceSummary } from ${projectImport('src/services/InlineReferenceSummary.ts')};`,
+	`import { createInlineReferencePlainText, createInlineReferenceSummary } from ${projectImport('src/services/InlineReferenceSummary.ts')};`,
 	'',
 	"const UUID = '11111111-1111-1111-1111-111111111111';",
 	"const key = createEmbedOccurrenceKey({ filePath: 'pages/a.md', line: 12, ch: 3, uuid: UUID });",
@@ -33,6 +33,7 @@ const lines = [
 	"assert.equal(createInlineReferenceSummary(longLine), longLine, 'inline summaries must not truncate long first lines');",
 	"assert.equal(createInlineReferenceSummary('## **Visible** [[Target|label]]'), 'Visible label', 'inline summaries should keep the existing Markdown cleanup behavior');",
 	"assert.equal(createInlineReferenceSummary('   '), '[Empty source block]');",
+	"assert.equal(createInlineReferencePlainText(' ** ** '), '', 'empty text fragments beside images must not create an empty-block label');",
 	'',
 	"console.log('Embed fold state and inline summary tests passed.');",
 ];

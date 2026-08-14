@@ -15,6 +15,7 @@ import { getOpeningMarkdownFenceState, isClosingMarkdownFence, type MarkdownFenc
 import { createEmbedOccurrenceKey } from "src/services/EmbedFoldStateService";
 import { t } from "src/i18n";
 import { calculateInlineAvailableWidth, createInlineHorizontalGeometryKey } from "./InlineWidgetGeometry";
+import { isEmbedRevealControlTarget } from "./EmbedRevealEventPolicy";
 
 interface BlockRenderTarget {
     from: number;
@@ -286,6 +287,8 @@ export function createAsyncBlockRendererPlugin(plugin: BlockReferenceEnhancer) {
             private listEmbedOverlayStates: Map<string, ListEmbedOverlayState> = new Map();
             private listEmbedOverlayEntries: Map<string, ListEmbedOverlayEntry> = new Map();
             private embedHeightCache: Map<string, number> = new Map();
+            private pendingEmbedImageMeasures: Map<string, string> = new Map();
+            private readonly embedImageMeasureKey = {};
             private scanDebounceTimer: number | null = null;
             private postRenderRescanTimer: number | null = null;
             private lastScanFingerprint = "";
@@ -377,6 +380,7 @@ export function createAsyncBlockRendererPlugin(plugin: BlockReferenceEnhancer) {
                 this.inlineEmbedWidthCache.clear();
                 this.listEmbedLayoutCache.clear();
                 this.embedHeightCache.clear();
+                this.pendingEmbedImageMeasures.clear();
                 if (this.overlayRoot) {
                     this.overlayRoot.remove();
                     this.overlayRoot = null;
@@ -742,6 +746,7 @@ export function createAsyncBlockRendererPlugin(plugin: BlockReferenceEnhancer) {
             }
 
             private createEmbedInteraction(target: BlockRenderTarget, widgetSignature: string) {
+                const refId = getTargetRefId(target);
                 return {
                     from: target.from,
                     to: target.to,
@@ -754,12 +759,48 @@ export function createAsyncBlockRendererPlugin(plugin: BlockReferenceEnhancer) {
                     listMarkerOffsetPx: target.listMarkerOffsetPx,
                     listContentOffsetPx: target.listContentOffsetPx,
                     cardPos: target.cardPos,
-                    refId: getTargetRefId(target),
+                    refId,
                     sourceBlockId: target.uuid,
                     signature: widgetSignature,
                     lineHeightPx: target.lineHeightPx,
                     reservedHeightPx: target.reservedHeightPx,
+                    onImageSettled: () => this.scheduleEmbedImageMeasure(refId, widgetSignature),
                 };
+            }
+
+            private scheduleEmbedImageMeasure(refId: string, signature: string) {
+                this.pendingEmbedImageMeasures.set(refId, signature);
+                this.view.requestMeasure({
+                    key: this.embedImageMeasureKey,
+                    read: () => {
+                        const measurements: Array<{ refId: string; signature: string; height: number }> = [];
+                        for (const [pendingRefId, pendingSignature] of this.pendingEmbedImageMeasures.entries()) {
+                            if (this.visibleWidgetStates.get(pendingRefId)?.signature !== pendingSignature) {
+                                continue;
+                            }
+
+                            const selector = `.block-reference-embed-widget[data-block-ref-id="${CSS.escape(pendingRefId)}"]`;
+                            const widget = this.view.scrollDOM.querySelector(selector);
+                            if (!isHtmlElement(widget) || !widget.isConnected) {
+                                continue;
+                            }
+
+                            const height = Math.ceil(widget.getBoundingClientRect().height);
+                            if (height > 0) {
+                                measurements.push({ refId: pendingRefId, signature: pendingSignature, height });
+                            }
+                        }
+                        this.pendingEmbedImageMeasures.clear();
+                        return measurements;
+                    },
+                    write: (measurements) => {
+                        for (const measurement of measurements) {
+                            if (this.visibleWidgetStates.get(measurement.refId)?.signature === measurement.signature) {
+                                this.embedHeightCache.set(measurement.refId, measurement.height);
+                            }
+                        }
+                    },
+                });
             }
 
             private captureRenderedEmbedHeight(refId: string) {
@@ -865,6 +906,7 @@ export function createAsyncBlockRendererPlugin(plugin: BlockReferenceEnhancer) {
                         refId,
                         sourceBlockId: target.uuid,
                         signature: buildTargetSignature(target),
+                        segments: inlineInfo.segments,
                     },
                 });
             }
@@ -1069,6 +1111,10 @@ export function createAsyncBlockRendererPlugin(plugin: BlockReferenceEnhancer) {
 
                 const target = event.target;
                 if (!isHtmlElement(target)) {
+                    return false;
+                }
+
+                if (isEmbedRevealControlTarget(target)) {
                     return false;
                 }
 
@@ -1277,7 +1323,7 @@ export function createAsyncBlockRendererPlugin(plugin: BlockReferenceEnhancer) {
                 try {
                     if (target.mode === "inline") {
                         const inlineInfo = plugin.getInlineReferenceInfo(target.uuid);
-						const summary = inlineInfo.text ?? t('render.missingBlockBracketed');
+                        const summary = inlineInfo.text ?? t('render.missingBlockBracketed');
 
                         if (controller.signal.aborted) {
                             return;
@@ -1298,6 +1344,7 @@ export function createAsyncBlockRendererPlugin(plugin: BlockReferenceEnhancer) {
                                     refId: getTargetRefId(target),
                                     sourceBlockId: target.uuid,
                                     signature: widgetSignature,
+                                    segments: inlineInfo.segments,
                                 },
                             }),
                         });

@@ -3,6 +3,9 @@ import { createBlockReferenceActionButtonsElement } from "src/ui/BlockReferenceA
 import { replaceChildrenFromHtml } from "src/utils/html";
 import { measureWidgetCoords } from "src/utils/widgetCoords";
 import { t } from "src/i18n";
+import type { BlockReferenceRenderSegment } from "src/services/BlockImageExtraction";
+import { createBlockReferenceImageElement, settleBlockReferenceImageElement } from "src/ui/BlockReferenceImageElement";
+import { shouldIgnoreBlockReferenceWidgetEvent } from "./BlockReferenceWidgetEventPolicy";
 
 export type BlockRenderMode = "inline" | "embed";
 export interface BlockWidgetInteraction {
@@ -22,6 +25,37 @@ export interface BlockWidgetInteraction {
     signature?: string;
     lineHeightPx?: number;
     reservedHeightPx?: number;
+    segments?: BlockReferenceRenderSegment[];
+    onImageSettled?: () => void;
+}
+
+function renderSegmentsEqual(
+    left?: readonly BlockReferenceRenderSegment[],
+    right?: readonly BlockReferenceRenderSegment[],
+): boolean {
+    if (left === right) {
+        return true;
+    }
+    if (!left || !right || left.length !== right.length) {
+        return false;
+    }
+
+    return left.every((segment, index) => {
+        const other = right[index];
+        if (segment.type !== other.type) {
+            return false;
+        }
+        if (segment.type === "text" && other.type === "text") {
+            return segment.text === other.text;
+        }
+        if (segment.type === "image" && other.type === "image") {
+            return segment.image.src === other.image.src
+                && segment.image.alt === other.image.alt
+                && segment.image.width === other.image.width
+                && segment.image.height === other.image.height;
+        }
+        return false;
+    });
 }
 
 /**
@@ -29,6 +63,8 @@ export interface BlockWidgetInteraction {
  * 它只根据传入的状态来决定自己应该显示什么，不包含任何异步逻辑。
  */
 export class BlockReferenceWidget extends WidgetType {
+    private imageObserverCleanup: (() => void) | null = null;
+
     constructor(
         readonly state: "loading" | "rendered",
         readonly mode: BlockRenderMode,
@@ -58,15 +94,15 @@ export class BlockReferenceWidget extends WidgetType {
             && this.interaction?.sourceBlockId === other.interaction?.sourceBlockId
             && this.interaction?.signature === other.interaction?.signature
             && this.interaction?.lineHeightPx === other.interaction?.lineHeightPx
-            && this.interaction?.reservedHeightPx === other.interaction?.reservedHeightPx;
+            && this.interaction?.reservedHeightPx === other.interaction?.reservedHeightPx
+            && renderSegmentsEqual(this.interaction?.segments, other.interaction?.segments);
     }
 
     ignoreEvent(event: Event): boolean {
-        if (this.mode !== "embed") {
-            return true;
-        }
-
-        return event.type !== "mousedown";
+        // The context-menu target plugin must see right-clicks that originate
+        // inside a rendered widget. Otherwise it reuses a stale editor line and
+        // block actions can write an id to the wrong list item.
+        return shouldIgnoreBlockReferenceWidgetEvent(this.mode, event.type);
     }
 
     coordsAt(dom: HTMLElement, pos: number, side: number) {
@@ -188,6 +224,87 @@ export class BlockReferenceWidget extends WidgetType {
         return spacer;
     }
 
+    private observeImages(container: HTMLElement, view: EditorView) {
+        this.imageObserverCleanup?.();
+        this.imageObserverCleanup = null;
+
+        const images = Array.from(container.querySelectorAll("img"));
+        if (images.length === 0) {
+            return;
+        }
+
+        const win = container.ownerDocument.defaultView;
+        let disposed = false;
+        let measureScheduled = false;
+        let frameId: number | null = null;
+        const listeners = new Map<HTMLImageElement, () => void>();
+        const cleanup = () => {
+            if (disposed) {
+                return;
+            }
+            disposed = true;
+            if (frameId !== null && win) {
+                win.cancelAnimationFrame(frameId);
+                frameId = null;
+            }
+            for (const [image, listener] of listeners.entries()) {
+                image.removeEventListener("load", listener);
+                image.removeEventListener("error", listener);
+            }
+            listeners.clear();
+        };
+        const scheduleMeasure = () => {
+            if (disposed || measureScheduled) {
+                return;
+            }
+
+            measureScheduled = true;
+            const measure = () => {
+                frameId = null;
+                measureScheduled = false;
+                if (disposed || !view.dom.isConnected || !container.isConnected) {
+                    return;
+                }
+
+                if (this.interaction?.onImageSettled) {
+                    this.interaction.onImageSettled();
+                } else {
+                    view.requestMeasure();
+                }
+            };
+
+            if (win?.requestAnimationFrame) {
+                frameId = win.requestAnimationFrame(measure);
+            } else {
+                measure();
+            }
+        };
+
+        for (const image of images) {
+            if (image.complete) {
+                settleBlockReferenceImageElement(image);
+                scheduleMeasure();
+                continue;
+            }
+
+            const onSettled = () => {
+                image.removeEventListener("load", onSettled);
+                image.removeEventListener("error", onSettled);
+                listeners.delete(image);
+                settleBlockReferenceImageElement(image);
+                scheduleMeasure();
+            };
+            listeners.set(image, onSettled);
+            image.addEventListener("load", onSettled, { once: true });
+            image.addEventListener("error", onSettled, { once: true });
+        }
+
+        // The stable frame itself can change the line height before the image
+        // starts loading. Measure once now, then again after load/error.
+        scheduleMeasure();
+        this.imageObserverCleanup = cleanup;
+    }
+
     toDOM(view: EditorView): HTMLElement {
         const doc = view.contentDOM.ownerDocument;
         const isBlockWidget = this.interaction?.blockWidget ?? this.mode === "embed";
@@ -200,7 +317,9 @@ export class BlockReferenceWidget extends WidgetType {
         const container = doc.createElement(this.mode === "embed" ? "div" : "span");
 
         if (this.mode === "embed") {
-            return this.createEmbedCard(doc, isBlockWidget, false);
+            const card = this.createEmbedCard(doc, isBlockWidget, false);
+            this.observeImages(card, view);
+            return card;
         } else {
             container.className = "block-reference-enhancer-widget block-reference-inline-ref";
         }
@@ -221,11 +340,35 @@ export class BlockReferenceWidget extends WidgetType {
         if (this.state === "loading") {
             container.setText(t('render.loading'));
             container.addClass("is-loading");
-        } else if (this.state === "rendered" && this.content) {
-            const text = doc.createElement("span");
-            text.className = "block-reference-inline-ref-text";
-            text.setText(this.content);
-            container.appendChild(text);
+        } else if (this.state === "rendered" && (this.content !== undefined || this.interaction?.segments)) {
+            const segments = this.interaction?.segments;
+            const hasImages = segments?.some((segment) => segment.type === "image") ?? false;
+            const hasText = segments?.some((segment) => segment.type === "text" && segment.text.length > 0) ?? false;
+            if (hasImages) {
+                container.addClass("has-image");
+                if (hasText) {
+                    container.addClass("has-image-text");
+                }
+
+                for (const segment of segments ?? []) {
+                    if (segment.type === "image") {
+                        container.appendChild(createBlockReferenceImageElement(doc, segment.image));
+                        continue;
+                    }
+                    if (!segment.text) {
+                        continue;
+                    }
+                    const text = doc.createElement("span");
+                    text.className = "block-reference-inline-ref-text";
+                    text.setText(segment.text);
+                    container.appendChild(text);
+                }
+            } else {
+                const text = doc.createElement("span");
+                text.className = "block-reference-inline-ref-text";
+                text.setText(this.content ?? "");
+                container.appendChild(text);
+            }
         } else {
             container.setText(t('render.invalidState'));
             container.addClass("is-error");
@@ -235,6 +378,13 @@ export class BlockReferenceWidget extends WidgetType {
             container.appendChild(createBlockReferenceActionButtonsElement(this.interaction.sourceBlockId, doc));
         }
 
+        this.observeImages(container, view);
+
         return container;
+    }
+
+    destroy(_dom: HTMLElement): void {
+        this.imageObserverCleanup?.();
+        this.imageObserverCleanup = null;
     }
 }

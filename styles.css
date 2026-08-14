@@ -91,7 +91,7 @@
 
 .block-reference-embed-root-fold-toggle {
     top: 0.2em;
-    left: -2.45em;
+    left: -0.85em;
 }
 
 .block-reference-embed-fold-toggle:hover,
@@ -99,21 +99,6 @@
     background-color: var(--background-modifier-hover);
     color: var(--text-normal);
     outline: none;
-}
-
-.markdown-source-view.mod-cm6 .cm-line:has(.block-reference-embed-root-fold-toggle) > .cm-formatting-list,
-.markdown-source-view.mod-cm6 .cm-line:has(.block-reference-embed-root-fold-toggle) > .list-bullet {
-    opacity: 0;
-}
-
-.markdown-reading-view li:has(> .block-reference-embed .block-reference-embed-root-fold-toggle),
-.markdown-preview-view li:has(> .block-reference-embed .block-reference-embed-root-fold-toggle) {
-    list-style-type: none;
-}
-
-.markdown-reading-view li:has(> .block-reference-embed .block-reference-embed-root-fold-toggle)::marker,
-.markdown-preview-view li:has(> .block-reference-embed .block-reference-embed-root-fold-toggle)::marker {
-    content: "";
 }
 
 .block-reference-inline-ref {
@@ -130,6 +115,50 @@
 .block-reference-inline-ref-text {
     overflow-wrap: anywhere;
     word-break: break-word;
+}
+
+.block-reference-inline-ref.has-image {
+    display: inline-flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.3em;
+    max-width: 100%;
+    vertical-align: middle;
+}
+
+.block-reference-inline-ref-image-frame {
+    display: inline-block;
+    flex: 0 0 auto;
+    max-width: 100%;
+    overflow: hidden;
+    border-radius: 3px;
+    background: var(--background-primary-alt, var(--background-primary));
+    line-height: 0;
+    vertical-align: middle;
+}
+
+.block-reference-inline-ref-image {
+    display: block;
+    width: 100%;
+    height: 100%;
+    max-width: 100%;
+    object-fit: contain;
+}
+
+.block-reference-embed img.block-reference-embed-sized-image {
+    max-width: 100%;
+    object-fit: contain;
+    vertical-align: middle;
+}
+
+.block-reference-inline-ref.has-image > .block-reference-inline-ref-text {
+    min-width: 0;
+}
+
+.block-reference-embed img:not(.block-reference-inline-ref-image) {
+    max-width: 100%;
+    max-inline-size: 100%;
+    height: auto;
 }
 
 .block-reference-action-buttons {
@@ -750,6 +779,17 @@
     white-space: normal;
 }
 
+.markdown-source-view.mod-cm6 .cm-content .block-reference-enhancer-widget.block-reference-inline-ref.has-image {
+    display: inline-flex;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.markdown-source-view.mod-cm6 .cm-content .block-reference-enhancer-widget.block-reference-inline-ref.has-image > .block-reference-inline-ref-text {
+    display: inline;
+    flex: 0 1 auto;
+}
+
 .markdown-source-view.mod-cm6 .cm-content .block-reference-embed .block-reference-inline-ref {
     display: inline-block;
     max-width: 100%;
@@ -762,6 +802,17 @@
     display: block;
     min-width: 0;
     white-space: normal;
+}
+
+.block-reference-embed .block-reference-inline-ref.has-image {
+    display: inline-flex;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.block-reference-embed .block-reference-inline-ref.has-image > .block-reference-inline-ref-text {
+    display: inline;
+    flex: 0 1 auto;
 }
 
 .markdown-source-view.mod-cm6 .cm-content .block-reference-source-badge-anchor {

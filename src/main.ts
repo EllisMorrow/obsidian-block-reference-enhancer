@@ -28,7 +28,19 @@ import {
 	EmbedFoldStateService,
 	type PersistedEmbedFoldState,
 } from './services/EmbedFoldStateService';
-import { createInlineReferenceSummary } from './services/InlineReferenceSummary';
+import { createInlineReferencePlainText, createInlineReferenceSummary } from './services/InlineReferenceSummary';
+import {
+	composeNestedInlineReferenceSegments,
+	replaceNestedBlockReferencesWithText,
+} from './services/NestedInlineReferenceSegments';
+import {
+	BlockImageSpec,
+	BlockReferenceRenderSegment,
+	extractBlockFirstLineImages,
+	prepareBlockEmbedMarkdownImages,
+	type PreparedBlockEmbedImage,
+} from './services/BlockImageExtraction';
+import { createBlockReferenceImageElement, settleBlockReferenceImageElement } from './ui/BlockReferenceImageElement';
 import { DualPropertySyncService } from './services/DualPropertySyncService';
 import { DEFAULT_DUAL_PROPERTY_WHITELIST } from './dual-property-sync/rules';
 import type { PersistedDualPropertySyncState } from './dual-property-sync/types';
@@ -100,6 +112,12 @@ interface ReadingModeRenderQueue {
 	retainCount: number;
 }
 
+interface InlineReferenceInfo {
+	text: string | null;
+	segments?: BlockReferenceRenderSegment[];
+	stale: boolean;
+}
+
 interface ReferencePreviewCacheEntry {
 	mtime: number;
 	lines: string[];
@@ -161,6 +179,7 @@ export default class BlockReferenceEnhancer extends Plugin {
 	private hiddenLogseqPropertyMatcher: HiddenLogseqPropertyMatcher = buildHiddenLogseqPropertyMatcher(DEFAULT_HIDDEN_LOGSEQ_PROPERTY_KEYS);
 	private logseqPropertySettingsRevision = 0;
 	private readonly logseqPropertyEvents = new Events();
+	private readonly actionEventDocuments = new Set<Document>();
 
 	setEditorContextMenuTarget(target: EditorContextMenuTarget) {
 		this.editorContextMenuTarget = target;
@@ -176,15 +195,19 @@ export default class BlockReferenceEnhancer extends Plugin {
 	}
 
 	private clearPinnedBackButtons(except?: HTMLElement | null) {
-		activeDocument.querySelectorAll('.is-back-pinned').forEach((element) => {
-			if (except && element === except) {
-				return;
-			}
+		const documents = new Set(this.actionEventDocuments);
+		documents.add(activeDocument);
+		for (const document of documents) {
+			document.querySelectorAll('.is-back-pinned').forEach((element) => {
+				if (except && element === except) {
+					return;
+				}
 
-			if (isHtmlElement(element)) {
-				element.removeClass('is-back-pinned');
-			}
-		});
+				if (isHtmlElement(element)) {
+					element.removeClass('is-back-pinned');
+				}
+			});
+		}
 	}
 
 	private pinBackButtonHost(host: HTMLElement) {
@@ -294,7 +317,7 @@ export default class BlockReferenceEnhancer extends Plugin {
 			this.addEditorBlockCopyMenuItems(menu, editor, info);
 		}));
 
-		this.registerDomEvent(activeDocument, 'mousedown', (event) => {
+		const handleActionMouseDown = (event: MouseEvent) => {
 			if (event.button !== 0) {
 				return;
 			}
@@ -355,9 +378,9 @@ export default class BlockReferenceEnhancer extends Plugin {
 				? parsedSourceStartLine
 					: undefined,
 			);
-		}, true);
+		};
 
-		this.registerDomEvent(activeDocument, 'click', (event) => {
+		const handleActionClick = (event: MouseEvent) => {
 			if (event.button !== 0) {
 				return;
 			}
@@ -397,7 +420,25 @@ export default class BlockReferenceEnhancer extends Plugin {
 			event.preventDefault();
 			event.stopPropagation();
 			void this.openSourceBlockFromBackButton(blockId, event);
-		}, true);
+		};
+
+		const registerActionEventDocument = (document: Document) => {
+			if (this.actionEventDocuments.has(document)) {
+				return;
+			}
+
+			this.actionEventDocuments.add(document);
+			this.registerDomEvent(document, 'mousedown', handleActionMouseDown, true);
+			this.registerDomEvent(document, 'click', handleActionClick, true);
+		};
+
+		registerActionEventDocument(activeDocument);
+		this.app.workspace.iterateAllLeaves((leaf) => {
+			registerActionEventDocument(leaf.view.containerEl.ownerDocument);
+		});
+		this.registerEvent(this.app.workspace.on('window-open', (_workspaceWindow, window) => {
+			registerActionEventDocument(window.document);
+		}));
 
 		this.app.workspace.onLayoutReady(() => {
 			void this.handleLayoutReady();
@@ -703,6 +744,7 @@ export default class BlockReferenceEnhancer extends Plugin {
 	private resolveEditorMenuTargetLine(editor: Editor, info: MarkdownView | MarkdownFileInfo): number {
 		const filePath = info.file?.path;
 		const target = this.editorContextMenuTarget;
+		this.editorContextMenuTarget = null;
 		const isRecentTarget = !!target && Date.now() - target.capturedAt < 2000;
 		if (
 			filePath
@@ -929,11 +971,11 @@ export default class BlockReferenceEnhancer extends Plugin {
 		return this.getInlineReferenceInfo(uuid).text;
 	}
 
-	getInlineReferenceInfo(uuid: string): { text: string | null; stale: boolean } {
+	getInlineReferenceInfo(uuid: string): InlineReferenceInfo {
 		return this.getInlineReferenceInfoInternal(uuid, new Set<string>());
 	}
 
-	private getInlineReferenceInfoInternal(uuid: string, visited: Set<string>): { text: string | null; stale: boolean } {
+	private getInlineReferenceInfoInternal(uuid: string, visited: Set<string>): InlineReferenceInfo {
 		if (visited.has(uuid)) {
 			return { text: t('render.cyclicBlockBracketed'), stale: false };
 		}
@@ -947,14 +989,68 @@ export default class BlockReferenceEnhancer extends Plugin {
 		nextVisited.add(uuid);
 
 		const firstLine = block.rawContent.split(/\r?\n/, 1)[0] ?? '';
-		const expandedLine = firstLine.replace(/(?:\(\(|\uFF08\uFF08)([A-Za-z0-9_-]{36,})(?:\)\)|\uFF09\uFF09)/g, (_match, nestedUuid: string) => {
-			return this.getInlineReferenceInfoInternal(nestedUuid, nextVisited).text ?? t('render.missingBlockBracketed');
+		const nestedInfoCache = new Map<string, InlineReferenceInfo>();
+		const resolveNestedReference = (nestedUuid: string): InlineReferenceInfo => {
+			const cached = nestedInfoCache.get(nestedUuid);
+			if (cached) {
+				return cached;
+			}
+			const nested = this.getInlineReferenceInfoInternal(nestedUuid, nextVisited);
+			nestedInfoCache.set(nestedUuid, nested);
+			return nested;
+		};
+		const expandNestedReferences = (line: string) => replaceNestedBlockReferencesWithText(
+			line,
+			(nestedUuid) => resolveNestedReference(nestedUuid).text,
+			t('render.missingBlockBracketed'),
+		);
+		const summary = createInlineReferenceSummary(expandNestedReferences(firstLine));
+		const imageExtraction = extractBlockFirstLineImages(firstLine);
+		const renderSegments = composeNestedInlineReferenceSegments(imageExtraction.segments, {
+			missingReferenceText: t('render.missingBlockBracketed'),
+			renderText: createInlineReferencePlainText,
+			resolveImage: (image) => this.resolveInlineReferenceImage(image, block.filePath),
+			resolveNestedReference,
 		});
 
-		const summary = createInlineReferenceSummary(expandedLine);
 		return {
 			text: summary,
+			segments: renderSegments,
 			stale: block.status === 'stale',
+		};
+	}
+
+	private resolveInlineReferenceImage(image: BlockImageSpec, sourcePath: string): BlockImageSpec | null {
+		const src = image.src.trim();
+		if (!src) {
+			return null;
+		}
+
+		if (/^(?:https?:|app:|blob:|data:image\/|\/\/)/i.test(src)) {
+			return { ...image, src };
+		}
+
+		// Reject non-image custom protocols instead of assigning them directly to
+		// an img element. Local vault paths are resolved by Obsidian itself.
+		if (/^[a-z][a-z0-9+.-]*:/i.test(src)) {
+			return null;
+		}
+
+		let linkPath = src;
+		try {
+			linkPath = decodeURIComponent(src);
+		} catch {
+			// Keep the original source when it contains a literal percent sign.
+		}
+
+		const file = this.app.metadataCache.getFirstLinkpathDest(linkPath, sourcePath);
+		if (!(file instanceof TFile)) {
+			return null;
+		}
+
+		return {
+			...image,
+			src: this.app.vault.getResourcePath(file),
 		};
 	}
 
@@ -1145,6 +1241,7 @@ export default class BlockReferenceEnhancer extends Plugin {
 				this.restoreScrollAnchor(queue.scrollRoot, scrollAnchor);
 				await this.waitForNextAnimationFrame();
 				this.restoreScrollAnchor(queue.scrollRoot, scrollAnchor);
+				this.observeLateReadingModeImages(task.host, queue.scrollRoot, scrollAnchor, task.component);
 			}
 		} finally {
 			queue.isFlushing = false;
@@ -1300,7 +1397,13 @@ export default class BlockReferenceEnhancer extends Plugin {
 		element.setAttribute(MANUAL_RENDER_SCOPE_ATTR, 'true');
 	}
 
-	private createInlineReferenceElement(ownerDocument: Document, uuid: string, summary: string, stale: boolean): HTMLSpanElement {
+	private createInlineReferenceElement(
+		ownerDocument: Document,
+		uuid: string,
+		summary: string,
+		stale: boolean,
+		segments?: readonly BlockReferenceRenderSegment[],
+	): HTMLSpanElement {
 		const inlineRef = ownerDocument.createElement('span');
 		inlineRef.addClass('block-reference-inline-ref');
 		inlineRef.dataset.blockRefSourceId = uuid;
@@ -1310,11 +1413,36 @@ export default class BlockReferenceEnhancer extends Plugin {
 		}
 		inlineRef.setAttribute(MANAGED_NODE_ATTR, 'true');
 
-		const text = ownerDocument.createElement('span');
-		text.addClass('block-reference-inline-ref-text');
-		text.setText(summary);
+		const hasImages = segments?.some((segment) => segment.type === 'image') ?? false;
+		const hasText = segments?.some((segment) => segment.type === 'text' && segment.text.length > 0) ?? false;
+		if (hasImages) {
+			inlineRef.addClass('has-image');
+			if (hasText) {
+				inlineRef.addClass('has-image-text');
+			}
 
-		inlineRef.append(text, createBlockReferenceActionButtonsElement(uuid, ownerDocument));
+			for (const segment of segments ?? []) {
+				if (segment.type === 'image') {
+					inlineRef.appendChild(createBlockReferenceImageElement(ownerDocument, segment.image));
+					continue;
+				}
+
+				if (!segment.text) {
+					continue;
+				}
+				const text = ownerDocument.createElement('span');
+				text.addClass('block-reference-inline-ref-text');
+				text.setText(segment.text);
+				inlineRef.appendChild(text);
+			}
+		} else {
+			const text = ownerDocument.createElement('span');
+			text.addClass('block-reference-inline-ref-text');
+			text.setText(summary);
+			inlineRef.appendChild(text);
+		}
+
+		inlineRef.appendChild(createBlockReferenceActionButtonsElement(uuid, ownerDocument));
 		return inlineRef;
 	}
 
@@ -1410,9 +1538,167 @@ export default class BlockReferenceEnhancer extends Plugin {
 			return;
 		}
 
+		const prepared = prepareBlockEmbedMarkdownImages(markdown);
 		this.markManualRenderScope(container);
-		await MarkdownRenderer.render(this.app, markdown, container, sourcePath, component);
+		await MarkdownRenderer.render(this.app, prepared.markdown, container, sourcePath, component);
+		this.applyEmbedImageSizes(container, prepared.images, sourcePath);
 		await this.processRenderedReferences(container, sourcePath, component, visitedEmbeds);
+	}
+
+	private normalizeRenderedImageSource(source: string, ownerDocument: Document): string {
+		try {
+			return new URL(source, ownerDocument.baseURI).href;
+		} catch {
+			return source;
+		}
+	}
+
+	private applyEmbedImageSizes(container: HTMLElement, images: readonly PreparedBlockEmbedImage[], sourcePath: string) {
+		if (images.length === 0) {
+			return;
+		}
+
+		const renderedImages = Array.from(container.querySelectorAll('img'));
+		const usedImages = new Set<HTMLImageElement>();
+		for (const preparedImage of images) {
+			const resolvedImage = this.resolveInlineReferenceImage(preparedImage.image, sourcePath);
+			if (!resolvedImage) {
+				continue;
+			}
+
+			const expectedSource = this.normalizeRenderedImageSource(resolvedImage.src, container.ownerDocument);
+			const matchingRenderedImages = renderedImages.filter((candidate) => {
+				if (usedImages.has(candidate)) {
+					return false;
+				}
+				const candidateSource = candidate.currentSrc || candidate.src || candidate.getAttribute('src') || '';
+				return this.normalizeRenderedImageSource(candidateSource, container.ownerDocument) === expectedSource;
+			});
+			const renderedImage = matchingRenderedImages.find((candidate) => candidate.alt === preparedImage.renderedAlt)
+				?? matchingRenderedImages.find((candidate) => candidate.alt === resolvedImage.alt)
+				?? matchingRenderedImages[0];
+			if (!renderedImage) {
+				continue;
+			}
+
+			usedImages.add(renderedImage);
+			renderedImage.alt = resolvedImage.alt;
+			if (resolvedImage.width === undefined && resolvedImage.height === undefined) {
+				continue;
+			}
+
+			renderedImage.addClass('block-reference-embed-sized-image');
+			renderedImage.style.maxWidth = '100%';
+			if (resolvedImage.width !== undefined) {
+				renderedImage.setAttribute('width', String(resolvedImage.width));
+				renderedImage.style.width = `${resolvedImage.width}px`;
+			}
+			if (resolvedImage.height !== undefined) {
+				renderedImage.setAttribute('height', String(resolvedImage.height));
+			}
+			if (resolvedImage.width !== undefined && resolvedImage.height !== undefined) {
+				renderedImage.style.height = 'auto';
+				renderedImage.style.aspectRatio = `${resolvedImage.width} / ${resolvedImage.height}`;
+			} else if (resolvedImage.height !== undefined) {
+				renderedImage.style.width = 'auto';
+				renderedImage.style.height = `${resolvedImage.height}px`;
+			} else {
+				renderedImage.style.height = 'auto';
+			}
+		}
+	}
+
+	private observeLateReadingModeImages(
+		container: HTMLElement,
+		scrollRoot: HTMLElement,
+		snapshot: ScrollAnchorSnapshot | null,
+		component: Component,
+	) {
+		const images = Array.from(container.querySelectorAll('img'));
+		if (images.length === 0) {
+			return;
+		}
+
+		let settledCompleteImage = false;
+		for (const image of images) {
+			if (image.complete) {
+				settleBlockReferenceImageElement(image);
+				settledCompleteImage = true;
+			}
+		}
+		const pendingImages = new Set(images.filter((image) => !image.complete));
+
+		const win = container.ownerDocument.defaultView;
+		if (!win) {
+			return;
+		}
+
+		let disposed = false;
+		let frameId: number | null = null;
+		let expectedScrollTop = scrollRoot.scrollTop;
+		const listeners = new Map<HTMLImageElement, () => void>();
+		const cleanup = () => {
+			if (disposed) {
+				return;
+			}
+			disposed = true;
+			if (frameId !== null) {
+				win.cancelAnimationFrame(frameId);
+				frameId = null;
+			}
+			for (const [image, listener] of listeners.entries()) {
+				image.removeEventListener('load', listener);
+				image.removeEventListener('error', listener);
+			}
+			listeners.clear();
+			pendingImages.clear();
+		};
+
+		const scheduleRestore = () => {
+			if (disposed || frameId !== null) {
+				return;
+			}
+
+			frameId = win.requestAnimationFrame(() => {
+				frameId = null;
+				if (!disposed && snapshot && container.isConnected && scrollRoot.isConnected) {
+					// A meaningful scrollTop change means the user (or a newer render)
+					// moved the viewport. Never pull it back to an old image anchor.
+					if (Math.abs(scrollRoot.scrollTop - expectedScrollTop) <= 2) {
+						this.restoreScrollAnchor(scrollRoot, snapshot);
+						expectedScrollTop = scrollRoot.scrollTop;
+					}
+				}
+
+				if (pendingImages.size === 0) {
+					cleanup();
+				}
+			});
+		};
+
+		for (const image of pendingImages) {
+			const onSettled = () => {
+				if (!pendingImages.delete(image)) {
+					return;
+				}
+				image.removeEventListener('load', onSettled);
+				image.removeEventListener('error', onSettled);
+				listeners.delete(image);
+				settleBlockReferenceImageElement(image);
+				scheduleRestore();
+			};
+			listeners.set(image, onSettled);
+			image.addEventListener('load', onSettled, { once: true });
+			image.addEventListener('error', onSettled, { once: true });
+			if (image.complete) {
+				onSettled();
+			}
+		}
+		if (settledCompleteImage) {
+			scheduleRestore();
+		}
+
+		component.register(cleanup);
 	}
 
 	private prepareEmbedMarkdownForRender(markdown: string, assumeRootBlock: boolean): string {
@@ -1476,7 +1762,10 @@ export default class BlockReferenceEnhancer extends Plugin {
 		const rootContainer = container.ownerDocument.createElement('div');
 		rootContainer.addClass('block-reference-embed-root');
 		const rootMarkdown = this.prepareEmbedMarkdownForRender(block.rawContent, true);
-		await this.renderMarkdownAndProcess(rootContainer, rootMarkdown, sourcePath, component, nextVisitedEmbeds);
+		// The Markdown belongs to the referenced block, not to the note that
+		// contains the reference. Relative media paths must therefore resolve
+		// from the block's own file at every level of a nested embed.
+		await this.renderMarkdownAndProcess(rootContainer, rootMarkdown, block.filePath, component, nextVisitedEmbeds);
 		contentNodes.push(rootContainer);
 
 		const normalizedChildMarkdown = normalizeEmbedChildrenMarkdown(block.childrenMarkdown ?? '');
@@ -1484,7 +1773,7 @@ export default class BlockReferenceEnhancer extends Plugin {
 		if (childMarkdown) {
 			const childrenContainer = container.ownerDocument.createElement('div');
 			childrenContainer.addClass('block-reference-embed-children');
-			await this.renderMarkdownAndProcess(childrenContainer, childMarkdown, sourcePath, component, nextVisitedEmbeds);
+			await this.renderMarkdownAndProcess(childrenContainer, childMarkdown, block.filePath, component, nextVisitedEmbeds);
 			contentNodes.push(childrenContainer);
 		}
 
@@ -1556,6 +1845,7 @@ export default class BlockReferenceEnhancer extends Plugin {
 			let match: RegExpExecArray | null;
 			let replacedInline = false;
 			const fragment = node.ownerDocument.createDocumentFragment();
+			const createdInlineReferences: HTMLSpanElement[] = [];
 			const replaceRegex = createBlockReferenceRegex();
 
 			while ((match = replaceRegex.exec(text))) {
@@ -1571,7 +1861,15 @@ export default class BlockReferenceEnhancer extends Plugin {
 				} else {
 					const inlineInfo = this.getInlineReferenceInfo(inlineUuid);
 					const summary = inlineInfo.text ?? t('render.missingBlockBracketed');
-					fragment.appendChild(this.createInlineReferenceElement(node.ownerDocument, inlineUuid, summary, inlineInfo.stale));
+					const inlineReference = this.createInlineReferenceElement(
+						node.ownerDocument,
+						inlineUuid,
+						summary,
+						inlineInfo.stale,
+						inlineInfo.segments,
+					);
+					fragment.appendChild(inlineReference);
+					createdInlineReferences.push(inlineReference);
 					replacedInline = true;
 				}
 
@@ -1584,6 +1882,15 @@ export default class BlockReferenceEnhancer extends Plugin {
 
 			fragment.appendChild(node.ownerDocument.createTextNode(text.slice(lastIndex)));
 			node.parentNode?.replaceChild(fragment, node);
+
+			if (previewRoot && createdInlineReferences.length > 0) {
+				const scrollRoot = this.readingModeRenderQueues.get(previewRoot)?.scrollRoot
+					?? this.findReadingModeScrollRoot(previewRoot);
+				for (const inlineReference of createdInlineReferences) {
+					const snapshot = this.captureScrollAnchor(previewRoot, scrollRoot, inlineReference);
+					this.observeLateReadingModeImages(inlineReference, scrollRoot, snapshot, component);
+				}
+			}
 		}
 
 		if (previewRoot) {
