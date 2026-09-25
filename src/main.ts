@@ -1588,7 +1588,7 @@ export default class BlockReferenceEnhancer extends Plugin {
 			}
 
 			renderedImage.addClass('block-reference-embed-sized-image');
-			renderedImage.style.maxWidth = '100%';
+			renderedImage.setCssStyles({ maxWidth: '100%' });
 			if (resolvedImage.width !== undefined) {
 				renderedImage.setAttribute('width', String(resolvedImage.width));
 				renderedImage.style.width = `${resolvedImage.width}px`;
@@ -1597,13 +1597,13 @@ export default class BlockReferenceEnhancer extends Plugin {
 				renderedImage.setAttribute('height', String(resolvedImage.height));
 			}
 			if (resolvedImage.width !== undefined && resolvedImage.height !== undefined) {
-				renderedImage.style.height = 'auto';
+				renderedImage.setCssStyles({ height: 'auto' });
 				renderedImage.style.aspectRatio = `${resolvedImage.width} / ${resolvedImage.height}`;
 			} else if (resolvedImage.height !== undefined) {
-				renderedImage.style.width = 'auto';
+				renderedImage.setCssStyles({ width: 'auto' });
 				renderedImage.style.height = `${resolvedImage.height}px`;
 			} else {
-				renderedImage.style.height = 'auto';
+				renderedImage.setCssStyles({ height: 'auto' });
 			}
 		}
 	}

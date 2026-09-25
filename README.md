@@ -470,8 +470,9 @@ Release notes:
 
 ## 🔒 Privacy
 
-- The plugin runs locally inside Obsidian.
-- It does not send your notes, UUIDs, or index data over the network.
+- Block indexing and reference resolution run locally inside Obsidian.
+- The plugin does not actively upload your notes, UUIDs, or index data.
+- Rendering an HTTP/HTTPS image referenced in a note may request that image URL from its remote host, so image rendering is not necessarily offline.
 - It does not include telemetry, ads, or account-gated behavior.
 - Its block index cache is stored through Obsidian's plugin data storage.
 
